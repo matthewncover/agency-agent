@@ -137,3 +137,12 @@ def build_server(engine: Engine) -> FastMCP:
     reads.register_read_tools(mcp, uc)
     authoring.register_authoring_tools(mcp, uc)
     return mcp
+
+
+def build_ingestion_server(engine: Engine) -> FastMCP:
+    """Ingestion grant only: authoring + reads. NO ritual write tools (mcp-tools §2)."""
+    mcp = FastMCP("goal-bot-ingestion")
+    uc = build_use_cases(engine)
+    authoring.register_authoring_tools(mcp, uc)
+    reads.register_read_tools(mcp, uc)
+    return mcp
