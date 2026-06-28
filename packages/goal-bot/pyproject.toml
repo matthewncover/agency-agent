@@ -1,0 +1,22 @@
+[project]
+name = "goal-bot"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "profile",            # workspace dep (ADR-0014: goal-bot depends on profile)
+    "fastmcp>=2.0",
+    "anthropic>=0.40",
+    "python-telegram-bot>=21",
+    "apscheduler>=3.10,<4",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

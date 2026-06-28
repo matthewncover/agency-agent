@@ -1,0 +1,107 @@
+from datetime import date, datetime
+from enum import StrEnum
+
+from pydantic import BaseModel
+
+
+class Level(StrEnum):
+    NEED = "need"
+    WANT = "want"
+
+
+class RecurrenceType(StrEnum):
+    ONEOFF = "oneoff"
+    DAILY = "daily"
+    ROTATION = "rotation"
+    QUOTA = "quota"
+    INTERVAL = "interval"
+    FIXED_SCHEDULE = "fixed_schedule"
+    ACCUMULATION = "accumulation"
+
+
+class CompletionType(StrEnum):
+    BINARY = "binary"
+    QUANTITY = "quantity"
+    DURATION = "duration"
+
+
+class VersionLifecycle(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+
+class PlanItemStatus(StrEnum):
+    PLANNED = "planned"
+    DONE = "done"
+    PARTIAL = "partial"
+    NOT_DONE = "not_done"
+    CARRIED_OVER = "carried_over"
+
+
+class TaskRefSource(StrEnum):
+    PERSONAL = "personal"
+    WORK = "work"
+
+
+class Chapter(BaseModel):
+    id: int | None = None
+    owner_profile_id: int
+    label: str | None = None
+    start_date: date
+    end_date: date
+
+
+class Goal(BaseModel):
+    id: int | None = None
+    owner_profile_id: int
+    chapter_id: int | None = None
+    title: str
+    created_at: datetime | None = None
+    archived_at: datetime | None = None
+
+
+class GoalVersion(BaseModel):
+    id: int | None = None
+    goal_id: int
+    version_no: int
+    level: Level
+    definition: str
+    why: str | None = None
+    recurrence_type: RecurrenceType
+    recurrence_config: dict
+    completion_type: CompletionType
+    target_quantity: float | None = None
+    quantity_unit: str | None = None
+    task_ref_source: TaskRefSource | None = None
+    task_ref_id: int | None = None
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    lifecycle: VersionLifecycle = VersionLifecycle.ACTIVE
+
+
+class DailyPlan(BaseModel):
+    id: int | None = None
+    person_id: int
+    plan_date: date
+    locked_in_at: datetime | None = None
+    lock_was_explicit: bool = False
+
+
+class DailyPlanItem(BaseModel):
+    id: int | None = None
+    daily_plan_id: int
+    goal_id: int
+    goal_version_id: int
+    status: PlanItemStatus = PlanItemStatus.PLANNED
+    quantity_actual: float | None = None
+    what_shifted: str | None = None
+
+
+class WinLogEntry(BaseModel):
+    id: int | None = None
+    person_id: int
+    goal_id: int | None = None
+    source: str
+    text: str
+    created_at: datetime | None = None
