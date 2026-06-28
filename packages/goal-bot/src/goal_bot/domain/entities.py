@@ -64,7 +64,7 @@ class Goal(BaseModel):
 class GoalVersion(BaseModel):
     id: int | None = None
     goal_id: int
-    version_no: int
+    version_no: int | None = None  # server-assigned per (goal_id, level) when None
     level: Level
     definition: str
     why: str | None = None
@@ -78,6 +78,7 @@ class GoalVersion(BaseModel):
     effective_from: datetime | None = None
     effective_to: datetime | None = None
     lifecycle: VersionLifecycle = VersionLifecycle.ACTIVE
+    obstacles: list[str] = []  # verbatim anticipated-obstacle rows (template §4)
 
 
 class DailyPlan(BaseModel):

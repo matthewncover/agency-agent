@@ -77,6 +77,16 @@ goal_version = Table(
     ),
 )
 
+anticipated_obstacle = Table(
+    "anticipated_obstacle", metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "goal_version_id", BigInteger,
+        ForeignKey("goalbot.goal_version.id", ondelete="CASCADE"), nullable=False,
+    ),
+    Column("text", Text, nullable=False),
+)
+
 goal_state = Table(
     "goal_state", metadata,
     Column(

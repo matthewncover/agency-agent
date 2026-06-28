@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Engine, insert, or_, select, update
+from sqlalchemy import Engine, func, insert, or_, select, update
 
 from goal_bot.application.ports import GoalRepositoryPort
 from goal_bot.domain.entities import Chapter, Goal, GoalVersion
@@ -97,7 +97,6 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
     def create_goal_version(self, version: GoalVersion) -> GoalVersion:
         vals: dict = {
             "goal_id": version.goal_id,
-            "version_no": version.version_no,
             "level": version.level,
             "definition": version.definition,
             "why": version.why,
@@ -115,11 +114,42 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
         if version.effective_to is not None:
             vals["effective_to"] = version.effective_to
         with self._engine.begin() as c:
+            # version_no is server-assigned per (goal_id, level): a bar change is
+            # a new version in that level's own lineage (spec §5.2 / OQ-14).
+            if version.version_no is not None:
+                vals["version_no"] = version.version_no
+            else:
+                prev_max = c.execute(
+                    select(func.max(t.goal_version.c.version_no))
+                    .where(t.goal_version.c.goal_id == version.goal_id)
+                    .where(t.goal_version.c.level == version.level)
+                ).scalar()
+                vals["version_no"] = (prev_max or 0) + 1
+            # Close the prior current version at this (goal, level) so a bar
+            # bump leaves exactly one effective row per level (§5.2). Old
+            # daily_plan_items stay pinned to the closed version (OQ-14).
+            c.execute(
+                update(t.goal_version)
+                .where(t.goal_version.c.goal_id == version.goal_id)
+                .where(t.goal_version.c.level == version.level)
+                .where(t.goal_version.c.effective_to.is_(None))
+                .values(effective_to=func.now())
+            )
             row = c.execute(
                 insert(t.goal_version).values(**vals)
                 .returning(t.goal_version)
             ).one()
-        return _goal_version(row)
+            if version.obstacles:
+                c.execute(
+                    insert(t.anticipated_obstacle),
+                    [
+                        {"goal_version_id": row.id, "text": text}
+                        for text in version.obstacles
+                    ],
+                )
+        result = _goal_version(row)
+        result.obstacles = list(version.obstacles)
+        return result
 
     def get_goal_detail(
         self, goal_id: int
@@ -134,7 +164,22 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 select(t.goal_version)
                 .where(t.goal_version.c.goal_id == goal_id)
             ).all()
-        return _goal(g_row), [_goal_version(r) for r in v_rows]
+            versions = [_goal_version(r) for r in v_rows]
+            if versions:
+                obs_rows = c.execute(
+                    select(t.anticipated_obstacle)
+                    .where(
+                        t.anticipated_obstacle.c.goal_version_id.in_(
+                            [v.id for v in versions]
+                        )
+                    )
+                ).all()
+                by_version: dict[int, list[str]] = {}
+                for o in obs_rows:
+                    by_version.setdefault(o.goal_version_id, []).append(o.text)
+                for v in versions:
+                    v.obstacles = by_version.get(v.id, [])
+        return _goal(g_row), versions
 
     def get_full_goal_list(
         self, owner_profile_id: int, on: date

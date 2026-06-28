@@ -19,7 +19,6 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
     @mcp.tool
     def create_goal_version(
         goal_id: int,
-        version_no: int,
         level: str,
         definition: str,
         recurrence_type: str,
@@ -28,14 +27,18 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         why: str | None = None,
         target_quantity: float | None = None,
         quantity_unit: str | None = None,
+        obstacles: list[str] | None = None,
         task_ref_source: str | None = None,
         task_ref_id: int | None = None,
         lifecycle: str = "active",
     ) -> int:
-        """Create a new version for an existing goal and return the version id."""
+        """Create a new version for an existing goal and return the version id.
+
+        version_no is assigned by the server (per goal+level); a bar change is a
+        new version, same goal id. `obstacles` are stored verbatim, one row each.
+        """
         return uc.create_goal_version(
             goal_id=goal_id,
-            version_no=version_no,
             level=level,
             definition=definition,
             why=why,
@@ -44,6 +47,7 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
             completion_type=completion_type,
             target_quantity=target_quantity,
             quantity_unit=quantity_unit,
+            obstacles=obstacles or [],
             task_ref_source=task_ref_source,
             task_ref_id=task_ref_id,
             lifecycle=lifecycle,

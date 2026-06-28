@@ -49,6 +49,47 @@ def test_create_and_get_goal_detail(goal_repo, person_id):
 
 
 @pytest.mark.integration
+def test_create_goal_version_persists_obstacles(goal_repo, person_id):
+    g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="steps"))
+    obstacles = ["waking late and rushed", "gassed after work"]
+    created = goal_repo.create_goal_version(
+        _make_version(g.id, Level.NEED, obstacles=obstacles)
+    )
+    assert created.obstacles == obstacles
+
+    _, versions = goal_repo.get_goal_detail(g.id)
+    assert versions[0].obstacles == obstacles
+
+
+@pytest.mark.integration
+def test_version_no_auto_assigned_and_prior_closed(goal_repo, person_id):
+    g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="steps"))
+    need_v1 = GoalVersion(
+        goal_id=g.id, level=Level.NEED, definition="5k",
+        recurrence_type=RecurrenceType.DAILY, recurrence_config={},
+        completion_type=CompletionType.BINARY,
+    )
+    want_v1 = need_v1.model_copy(update={"level": Level.WANT, "definition": "7k"})
+    goal_repo.create_goal_version(need_v1)
+    goal_repo.create_goal_version(want_v1)
+    # a bar bump on need: same goal, new version in the need lineage only
+    goal_repo.create_goal_version(need_v1.model_copy(update={"definition": "6k"}))
+
+    _, versions = goal_repo.get_goal_detail(g.id)
+    by_level = {}
+    for v in versions:
+        by_level.setdefault(v.level, []).append(v)
+
+    need_versions = sorted(by_level[Level.NEED], key=lambda v: v.version_no)
+    assert [v.version_no for v in need_versions] == [1, 2]
+    assert need_versions[0].effective_to is not None  # prior closed
+    assert need_versions[1].effective_to is None       # new current
+    # want is its own lineage, untouched by the need bump
+    assert [v.version_no for v in by_level[Level.WANT]] == [1]
+    assert by_level[Level.WANT][0].effective_to is None
+
+
+@pytest.mark.integration
 def test_get_full_goal_list_includes_chapter_and_chapterless(goal_repo, person_id):
     ch = goal_repo.create_chapter(Chapter(
         owner_profile_id=person_id,
