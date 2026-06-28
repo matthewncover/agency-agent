@@ -1,0 +1,39 @@
+[project]
+name = "agency-agent"
+version = "0.0.0"
+description = "agency-agent monorepo (profile, task-tracker, goal-bot)"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+profile = { workspace = true }
+goal-bot = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"packages/*/src/**/tools/*.py" = ["E501"]
+"packages/*/src/**/application/prompt.py" = ["E501"]
+"packages/*/tests/*.py" = ["E501"]
+"migrations/versions/*.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/profile/tests", "packages/goal-bot/tests"]
+markers = ["integration: needs a running Postgres"]
+addopts = "--import-mode=importlib"
