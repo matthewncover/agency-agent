@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(just test *)",
+      "Bash(just lint *)",
+      "Bash(xargs cat)",
+      "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -c ' *)"
+    ]
+  }
+}
