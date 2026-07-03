@@ -11,6 +11,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 profile = { workspace = true }
 goal-bot = { workspace = true }
+task-tracker-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -34,6 +35,6 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "migrations/versions/*.py" = ["E501"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/profile/tests", "packages/goal-bot/tests"]
+testpaths = ["packages/profile/tests", "packages/task-tracker/tests", "packages/goal-bot/tests"]
 markers = ["integration: needs a running Postgres"]
 addopts = "--import-mode=importlib"
