@@ -1,4 +1,5 @@
 """profile schema (migration 0001)"""
+
 from alembic import op
 
 revision = "0001_profile_schema"
