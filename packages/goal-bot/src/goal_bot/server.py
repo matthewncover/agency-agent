@@ -1,24 +1,60 @@
+from agency_profile.infrastructure.adapters.profile_repo import (
+    SqlAlchemyProfileRepository,
+)
 from fastmcp import FastMCP
 from sqlalchemy import Engine
+from task_tracker.infrastructure.task_query_client import PgTaskQueryClient
 
+from goal_bot.application.ingestion import IngestionUseCases
 from goal_bot.application.use_cases import GoalUseCases
 from goal_bot.infrastructure.adapters.goal_repo import SqlAlchemyGoalRepository
 from goal_bot.infrastructure.adapters.plan_repo import SqlAlchemyPlanRepository
 from goal_bot.infrastructure.adapters.win_repo import SqlAlchemyWinRepository
-from goal_bot.tools import authoring, reads, ritual
+from goal_bot.tools import authoring, ingestion, reads, ritual
 
 RITUAL_TOOLS = [
-    "log_outcome", "lock_in_plan", "add_win", "record_reflection",
-    "get_full_goal_list", "get_plan", "get_goal_detail", "get_active_chapter",
+    "log_outcome",
+    "lock_in_plan",
+    "add_win",
+    "record_reflection",
+    "log_progress",
+    # Reassessment lifecycle (§3.2) — create_goal_version is scoped to inline
+    # re-anchoring; the other two are ritual-only lifecycle verbs.
+    "set_goal_lifecycle",
+    "set_rotation_pointer",
+    "create_goal_version",
+    "get_full_goal_list",
+    "get_plan",
+    "get_goal_detail",
+    "get_active_chapter",
+    "get_miss_detail",
 ]
 INGESTION_TOOLS = [
-    "create_chapter", "create_goal", "create_goal_version",
-    "create_goals", "create_goal_versions", "update_goal",
-    "get_full_goal_list", "get_goal_detail", "get_active_chapter",
+    "create_chapter",
+    "create_goal",
+    "create_goal_version",
+    "create_goals",
+    "create_goal_versions",
+    "update_goal",
+    "get_full_goal_list",
+    "get_goal_detail",
+    "get_active_chapter",
+    "get_goals_for_chapter",
+    # Deterministic goal-setting / re-ingest surface (B2): the LLM is handed
+    # prepared lists + classifications, it never guesses identity itself.
+    "propose_candidates",
+    "diff_chapter",
+    "rollover",
+    "check_goal_scope",
 ]
 # Reads in the ingestion grant: NO get_plan — ingestion never touches daily
 # plans and get_plan has a get-or-create side-effect (mcp-tools §2/§3.4).
-INGESTION_READS = ["get_full_goal_list", "get_goal_detail", "get_active_chapter"]
+INGESTION_READS = [
+    "get_full_goal_list",
+    "get_goal_detail",
+    "get_active_chapter",
+    "get_goals_for_chapter",
+]
 
 # Anthropic-format tool schemas for the ritual grant (used by MorningTurn).
 RITUAL_TOOL_DEFS: list[dict] = [
@@ -77,6 +113,95 @@ RITUAL_TOOL_DEFS: list[dict] = [
         },
     },
     {
+        "name": "log_progress",
+        "description": (
+            "Accrue progress toward an accumulation goal's chapter target "
+            "(e.g. +1h on the painting). The plan item's status derives from "
+            "the logged progress — never call log_outcome for an accumulation "
+            "goal. Exempt from miss semantics."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "integer", "description": "person_id"},
+                "goal_id": {"type": "integer"},
+                "amount": {"type": "number"},
+                "on": {"type": "string", "format": "date"},
+                "unit": {"type": "string"},
+            },
+            "required": ["owner", "goal_id", "amount"],
+        },
+    },
+    {
+        "name": "set_goal_lifecycle",
+        "description": (
+            "Reassessment lifecycle action the USER explicitly chose: "
+            "archive|unarchive (retire/redirect, or a one-off drop) · "
+            "pause|activate (dormant, not dropped). NEVER call without an "
+            "explicit choice in the conversation — the nudge only offers; the "
+            "human decides. Never auto-drop."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "integer"},
+                "state": {
+                    "type": "string",
+                    "enum": ["archive", "unarchive", "pause", "activate"],
+                },
+            },
+            "required": ["goal_id", "state"],
+        },
+    },
+    {
+        "name": "set_rotation_pointer",
+        "description": (
+            "Manually set a rotation goal's pointer ('today is a push-up day'). "
+            "No completion attached; never a side effect of log_outcome."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "integer"},
+                "position": {"type": "integer"},
+            },
+            "required": ["goal_id", "position"],
+        },
+    },
+    {
+        "name": "create_goal_version",
+        "description": (
+            "Scoped to inline RE-ANCHORING only: lower a recurring goal's bar to "
+            "the 95% floor as a new version (same goal_id, lower target). The "
+            "server assigns version_no and closes the prior version. Use only in "
+            "the reassessment flow on the user's explicit choice — not for "
+            "general authoring."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "integer"},
+                "level": {"type": "string", "enum": ["need", "want"]},
+                "definition": {"type": "string"},
+                "recurrence_type": {"type": "string"},
+                "recurrence_config": {"type": "object"},
+                "completion_type": {"type": "string"},
+                "why": {"type": "string"},
+                "target_quantity": {"type": "number"},
+                "quantity_unit": {"type": "string"},
+                "obstacles": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": [
+                "goal_id",
+                "level",
+                "definition",
+                "recurrence_type",
+                "recurrence_config",
+                "completion_type",
+            ],
+        },
+    },
+    {
         "name": "get_full_goal_list",
         "description": "Fetch all active goals for the person on a given date.",
         "input_schema": {
@@ -123,6 +248,21 @@ RITUAL_TOOL_DEFS: list[dict] = [
             "required": ["owner", "on"],
         },
     },
+    {
+        "name": "get_miss_detail",
+        "description": (
+            "The engaged-miss count + day-by-day for ONE goal. Call this ONLY "
+            "after the user has explicitly agreed to look at the pattern — never "
+            "volunteer it, never headline the count, never name it relative to "
+            "anyone else. Silence is never a miss; only self-reported not_done "
+            "days appear here."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"goal_id": {"type": "integer"}},
+            "required": ["goal_id"],
+        },
+    },
 ]
 
 
@@ -131,6 +271,15 @@ def build_use_cases(engine: Engine) -> GoalUseCases:
         goals=SqlAlchemyGoalRepository(engine),
         plans=SqlAlchemyPlanRepository(engine),
         wins=SqlAlchemyWinRepository(engine),
+        profiles=SqlAlchemyProfileRepository(engine),  # shared-completion (B7)
+    )
+
+
+def build_ingestion_use_cases(engine: Engine) -> IngestionUseCases:
+    return IngestionUseCases(
+        goals=SqlAlchemyGoalRepository(engine),
+        profiles=SqlAlchemyProfileRepository(engine),
+        tasks=PgTaskQueryClient(engine),
     )
 
 
@@ -140,6 +289,7 @@ def build_server(engine: Engine) -> FastMCP:
     ritual.register_ritual_tools(mcp, uc)
     reads.register_read_tools(mcp, uc)
     authoring.register_authoring_tools(mcp, uc)
+    ingestion.register_ingestion_tools(mcp, build_ingestion_use_cases(engine))
     return mcp
 
 
@@ -150,4 +300,5 @@ def build_ingestion_server(engine: Engine) -> FastMCP:
     uc = build_use_cases(engine)
     authoring.register_authoring_tools(mcp, uc)
     reads.register_read_tools(mcp, uc, include=INGESTION_READS)
+    ingestion.register_ingestion_tools(mcp, build_ingestion_use_cases(engine))
     return mcp

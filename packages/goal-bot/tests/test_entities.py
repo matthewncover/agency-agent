@@ -15,8 +15,15 @@ def test_level_enum_members():
 
 
 def test_recurrence_type_all_members():
-    for v in ("oneoff", "daily", "rotation", "quota", "interval",
-              "fixed_schedule", "accumulation"):
+    for v in (
+        "oneoff",
+        "daily",
+        "rotation",
+        "quota",
+        "interval",
+        "fixed_schedule",
+        "accumulation",
+    ):
         assert RecurrenceType(v) is not None
 
 

@@ -52,7 +52,13 @@ def _empty_ctx(person_id: int) -> MorningContext:
 
 @pytest.mark.integration
 def test_win_leads_no_premature_tools(migrated_engine, person_id):
-    fake = FakeLLM([LLMResponse(text="Good morning! Yesterday you moved — that anchors everything.")])
+    fake = FakeLLM(
+        [
+            LLMResponse(
+                text="Good morning! Yesterday you moved — that anchors everything."
+            )
+        ]
+    )
     turn = _make_turn(migrated_engine, fake)
 
     session = turn.start(_empty_ctx(person_id))
@@ -64,15 +70,30 @@ def test_win_leads_no_premature_tools(migrated_engine, person_id):
 @pytest.mark.integration
 def test_report_done(migrated_engine, person_id, goal_repo, plan_repo):
     g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="Move"))
-    v = goal_repo.create_goal_version(GoalVersion(goal_id=g.id, level=Level.NEED, definition="20 min", **_VKW))
+    v = goal_repo.create_goal_version(
+        GoalVersion(goal_id=g.id, level=Level.NEED, definition="20 min", **_VKW)
+    )
     plan = plan_repo.get_or_create_plan(person_id, TODAY)
-    item = plan_repo.add_plan_item(DailyPlanItem(daily_plan_id=plan.id, goal_id=g.id, goal_version_id=v.id))
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=g.id, goal_version_id=v.id)
+    )
 
-    fake = FakeLLM([
-        LLMResponse(text="Morning! Ready to move?"),
-        LLMResponse(text="", tool_calls=[ToolCall(id="tc1", name="log_outcome", args={"daily_plan_item_id": item.id, "status": "done"})]),
-        LLMResponse(text="Logged — good work."),
-    ])
+    fake = FakeLLM(
+        [
+            LLMResponse(text="Morning! Ready to move?"),
+            LLMResponse(
+                text="",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="log_outcome",
+                        args={"daily_plan_item_id": item.id, "status": "done"},
+                    )
+                ],
+            ),
+            LLMResponse(text="Logged — good work."),
+        ]
+    )
     turn = _make_turn(migrated_engine, fake)
 
     session = turn.start(_empty_ctx(person_id))
@@ -85,11 +106,22 @@ def test_report_done(migrated_engine, person_id, goal_repo, plan_repo):
 
 @pytest.mark.integration
 def test_manual_win(migrated_engine, person_id, win_repo):
-    fake = FakeLLM([
-        LLMResponse(text="Morning!"),
-        LLMResponse(text="", tool_calls=[ToolCall(id="tc2", name="add_win", args={"owner": person_id, "text": "finished the chapter"})]),
-        LLMResponse(text="Win saved."),
-    ])
+    fake = FakeLLM(
+        [
+            LLMResponse(text="Morning!"),
+            LLMResponse(
+                text="",
+                tool_calls=[
+                    ToolCall(
+                        id="tc2",
+                        name="add_win",
+                        args={"owner": person_id, "text": "finished the chapter"},
+                    )
+                ],
+            ),
+            LLMResponse(text="Win saved."),
+        ]
+    )
     turn = _make_turn(migrated_engine, fake)
 
     session = turn.start(_empty_ctx(person_id))
@@ -114,17 +146,34 @@ def test_null_tolerance_silence_produces_no_tool_calls(migrated_engine, person_i
 
 @pytest.mark.integration
 def test_ungranted_tool_refused(migrated_engine, person_id):
-    fake = FakeLLM([
-        LLMResponse(text="Morning!"),
-        LLMResponse(text="", tool_calls=[ToolCall(id="tc3", name="create_goal", args={"owner": person_id, "title": "New goal", "chapter_id": None})]),
-        LLMResponse(text="OK, let me handle that differently."),
-    ])
+    fake = FakeLLM(
+        [
+            LLMResponse(text="Morning!"),
+            LLMResponse(
+                text="",
+                tool_calls=[
+                    ToolCall(
+                        id="tc3",
+                        name="create_goal",
+                        args={
+                            "owner": person_id,
+                            "title": "New goal",
+                            "chapter_id": None,
+                        },
+                    )
+                ],
+            ),
+            LLMResponse(text="OK, let me handle that differently."),
+        ]
+    )
     turn = _make_turn(migrated_engine, fake)
 
     session = turn.start(_empty_ctx(person_id))
     session = turn.reply(session, "add a new goal for me")
 
     # create_goal was in an ungranted tool — no goals should be in the DB
-    goals = SqlAlchemyGoalRepository(migrated_engine).get_full_goal_list(person_id, TODAY)
+    goals = SqlAlchemyGoalRepository(migrated_engine).get_full_goal_list(
+        person_id, TODAY
+    )
     assert len(goals) == 0
     assert "OK" in session.response_text

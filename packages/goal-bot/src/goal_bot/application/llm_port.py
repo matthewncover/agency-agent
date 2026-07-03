@@ -26,4 +26,5 @@ class LLMPort(ABC):
     def complete(
         self, system: str, messages: list[dict], tools: list[dict]
     ) -> LLMResponse: ...
+
     # messages: provider-agnostic [{role, content}]; tools: JSON-schema tool defs

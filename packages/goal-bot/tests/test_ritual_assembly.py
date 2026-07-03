@@ -26,17 +26,39 @@ _VKW = dict(
 )
 
 
-def _make_goal(goal_repo, person_id, title, *, level=Level.NEED, why=None, chapter_id=None):
-    g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title=title, chapter_id=chapter_id))
+def _make_goal(
+    goal_repo,
+    person_id,
+    title,
+    *,
+    level=Level.NEED,
+    why=None,
+    chapter_id=None,
+    recurrence=RecurrenceType.DAILY,
+    recurrence_config=None,
+):
+    g = goal_repo.create_goal(
+        Goal(owner_profile_id=person_id, title=title, chapter_id=chapter_id)
+    )
     v = goal_repo.create_goal_version(
-        GoalVersion(goal_id=g.id, level=level, definition=title, why=why, **_VKW)
+        GoalVersion(
+            goal_id=g.id,
+            level=level,
+            definition=title,
+            why=why,
+            version_no=1,
+            recurrence_type=recurrence,
+            recurrence_config=recurrence_config or {},
+            completion_type=CompletionType.BINARY,
+        )
     )
     return g, v
 
 
 def _assemble(migrated_engine, person_id):
     return assemble_morning_context(
-        person_id, TODAY,
+        person_id,
+        TODAY,
         goals=SqlAlchemyGoalRepository(migrated_engine),
         plans=SqlAlchemyPlanRepository(migrated_engine),
         wins=SqlAlchemyWinRepository(migrated_engine),
@@ -51,7 +73,9 @@ def test_mixed_yesterday(migrated_engine, goal_repo, plan_repo, person_id):
 
     yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
     i_done = plan_repo.add_plan_item(
-        DailyPlanItem(daily_plan_id=yplan.id, goal_id=g_done.id, goal_version_id=v_done.id)
+        DailyPlanItem(
+            daily_plan_id=yplan.id, goal_id=g_done.id, goal_version_id=v_done.id
+        )
     )
     plan_repo.set_item_outcome(i_done.id, PlanItemStatus.DONE)
     i_nd = plan_repo.add_plan_item(
@@ -59,7 +83,9 @@ def test_mixed_yesterday(migrated_engine, goal_repo, plan_repo, person_id):
     )
     plan_repo.set_item_outcome(i_nd.id, PlanItemStatus.NOT_DONE)
     plan_repo.add_plan_item(
-        DailyPlanItem(daily_plan_id=yplan.id, goal_id=g_silent.id, goal_version_id=v_silent.id)
+        DailyPlanItem(
+            daily_plan_id=yplan.id, goal_id=g_silent.id, goal_version_id=v_silent.id
+        )
     )  # stays planned
 
     ctx = _assemble(migrated_engine, person_id)
@@ -82,7 +108,9 @@ def test_mixed_yesterday(migrated_engine, goal_repo, plan_repo, person_id):
 
 
 @pytest.mark.integration
-def test_null_tolerance_planned_is_carry_over_not_miss(migrated_engine, goal_repo, plan_repo, person_id):
+def test_null_tolerance_planned_is_carry_over_not_miss(
+    migrated_engine, goal_repo, plan_repo, person_id
+):
     g, v = _make_goal(goal_repo, person_id, "Meditate")
     yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
     plan_repo.add_plan_item(
@@ -123,15 +151,31 @@ def test_subset_vs_full_list(migrated_engine, goal_repo, plan_repo, person_id):
         )
     ).id
 
+    # 6 want-level one-offs → suggested/trimmable; a daily need → must-show.
     for i in range(6):
-        _make_goal(goal_repo, person_id, f"Goal {i}", chapter_id=chapter_id)
+        _make_goal(
+            goal_repo,
+            person_id,
+            f"Want {i}",
+            level=Level.WANT,
+            chapter_id=chapter_id,
+            recurrence=RecurrenceType.ONEOFF,
+        )
+    g_need, _ = _make_goal(goal_repo, person_id, "Daily need", chapter_id=chapter_id)
     # one chapter-less goal
     g_naked, _ = _make_goal(goal_repo, person_id, "Chapterless goal")
 
     ctx = _assemble(migrated_engine, person_id)
 
-    assert len(ctx.candidates) <= 5
-    assert len(ctx.full_list) >= 7
+    # Suggested (non-need) items are trimmed to the realism cap...
+    suggested = [c for c in ctx.candidates if c.bucket == "suggested"]
+    assert len(suggested) <= 3
+    # ...but the need is a protected promise — always present, never trimmed.
+    assert any(c.goal_id == g_need.id for c in ctx.candidates)
+    # trimmed-out non-needs are offered back via the lighter-day nudge
+    assert len(ctx.nudge_offer) >= 1
+
+    assert len(ctx.full_list) >= 8
     full_ids = {c.goal_id for c in ctx.full_list}
     candidate_ids = {c.goal_id for c in ctx.candidates}
     assert candidate_ids.issubset(full_ids)
@@ -145,9 +189,15 @@ def test_version_pinning_prefers_need(migrated_engine, goal_repo, person_id):
         GoalVersion(goal_id=g.id, level=Level.NEED, definition="5 min", **_VKW)
     )
     goal_repo.create_goal_version(
-        GoalVersion(goal_id=g.id, version_no=2, level=Level.WANT, definition="20 min",
-                    recurrence_type=RecurrenceType.DAILY, recurrence_config={},
-                    completion_type=CompletionType.BINARY)
+        GoalVersion(
+            goal_id=g.id,
+            version_no=2,
+            level=Level.WANT,
+            definition="20 min",
+            recurrence_type=RecurrenceType.DAILY,
+            recurrence_config={},
+            completion_type=CompletionType.BINARY,
+        )
     )
 
     ctx = _assemble(migrated_engine, person_id)

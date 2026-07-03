@@ -19,18 +19,20 @@ from sqlalchemy import text
 def _clean_db(migrated_engine):
     yield
     with migrated_engine.begin() as c:
-        c.execute(text(
-            "TRUNCATE "
-            "goalbot.daily_plan_item, goalbot.daily_plan, "
-            "goalbot.friction_log, goalbot.win_log, "
-            "goalbot.anticipated_obstacle, goalbot.goal_tag, "
-            "goalbot.goal_version, goalbot.goal_state, "
-            "goalbot.goal, goalbot.chapter, "
-            "goalbot.insight, goalbot.tag, "
-            "profile.profile_doc, profile.group_member, "
-            "profile.group_profile, profile.person, profile.profile "
-            "RESTART IDENTITY CASCADE"
-        ))
+        c.execute(
+            text(
+                "TRUNCATE "
+                "goalbot.daily_plan_item, goalbot.daily_plan, "
+                "goalbot.friction_log, goalbot.win_log, "
+                "goalbot.anticipated_obstacle, goalbot.goal_tag, "
+                "goalbot.goal_version, goalbot.goal_state, "
+                "goalbot.goal, goalbot.chapter, "
+                "goalbot.insight, goalbot.tag, "
+                "profile.profile_doc, profile.group_member, "
+                "profile.group_profile, profile.person, profile.profile "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
 
 
 @pytest.fixture

@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import Engine, func, insert, or_, select, update
 
 from goal_bot.application.ports import GoalRepositoryPort
-from goal_bot.domain.entities import Chapter, Goal, GoalVersion
+from goal_bot.domain.entities import Chapter, Goal, GoalState, GoalVersion, Insight
+from goal_bot.domain.recurrence import rotation_next_index
 from goal_bot.infrastructure import tables as t
 
 
@@ -112,10 +113,7 @@ def _insert_goal_version_row(c, version: GoalVersion) -> GoalVersion:
     if version.obstacles:
         c.execute(
             insert(t.anticipated_obstacle),
-            [
-                {"goal_version_id": row.id, "text": text}
-                for text in version.obstacles
-            ],
+            [{"goal_version_id": row.id, "text": text} for text in version.obstacles],
         )
     result = _goal_version(row)
     result.obstacles = list(version.obstacles)
@@ -140,9 +138,7 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             ).one()
         return _chapter(row)
 
-    def get_active_chapter(
-        self, owner_profile_id: int, on: date
-    ) -> Chapter | None:
+    def get_active_chapter(self, owner_profile_id: int, on: date) -> Chapter | None:
         with self._engine.connect() as c:
             row = c.execute(
                 select(t.chapter)
@@ -150,6 +146,13 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 .where(t.chapter.c.start_date <= on)
                 .where(t.chapter.c.end_date >= on)
                 .limit(1)
+            ).one_or_none()
+        return _chapter(row) if row else None
+
+    def get_chapter(self, chapter_id: int) -> Chapter | None:
+        with self._engine.connect() as c:
+            row = c.execute(
+                select(t.chapter).where(t.chapter.c.id == chapter_id)
             ).one_or_none()
         return _chapter(row) if row else None
 
@@ -178,16 +181,12 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 out.append((saved_goal, saved_versions))
         return out
 
-    def create_goal_versions(
-        self, versions: list[GoalVersion]
-    ) -> list[GoalVersion]:
+    def create_goal_versions(self, versions: list[GoalVersion]) -> list[GoalVersion]:
         """Add N versions to existing goals atomically (re-ingest bar changes)."""
         with self._engine.begin() as c:
             return [_insert_goal_version_row(c, v) for v in versions]
 
-    def get_goal_detail(
-        self, goal_id: int
-    ) -> tuple[Goal, list[GoalVersion]] | None:
+    def get_goal_detail(self, goal_id: int) -> tuple[Goal, list[GoalVersion]] | None:
         with self._engine.connect() as c:
             g_row = c.execute(
                 select(t.goal).where(t.goal.c.id == goal_id)
@@ -195,14 +194,12 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             if not g_row:
                 return None
             v_rows = c.execute(
-                select(t.goal_version)
-                .where(t.goal_version.c.goal_id == goal_id)
+                select(t.goal_version).where(t.goal_version.c.goal_id == goal_id)
             ).all()
             versions = [_goal_version(r) for r in v_rows]
             if versions:
                 obs_rows = c.execute(
-                    select(t.anticipated_obstacle)
-                    .where(
+                    select(t.anticipated_obstacle).where(
                         t.anticipated_obstacle.c.goal_version_id.in_(
                             [v.id for v in versions]
                         )
@@ -215,9 +212,7 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                     v.obstacles = by_version.get(v.id, [])
         return _goal(g_row), versions
 
-    def get_full_goal_list(
-        self, owner_profile_id: int, on: date
-    ) -> list[Goal]:
+    def get_full_goal_list(self, owner_profile_id: int, on: date) -> list[Goal]:
         active = self.get_active_chapter(owner_profile_id, on)
         active_chapter_id = active.id if active else None
 
@@ -246,12 +241,146 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             ).all()
         return [_goal(r) for r in rows]
 
+    def get_goals_for_chapter(
+        self, chapter_id: int, owner_profile_id: int | None = None
+    ) -> list[Goal]:
+        stmt = select(t.goal).where(t.goal.c.chapter_id == chapter_id)
+        if owner_profile_id is not None:
+            stmt = stmt.where(t.goal.c.owner_profile_id == owner_profile_id)
+        with self._engine.connect() as c:
+            rows = c.execute(stmt.order_by(t.goal.c.id)).all()
+        return [_goal(r) for r in rows]
+
+    def list_all_goals(self, owner_profile_id: int) -> list[Goal]:
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(t.goal)
+                .where(t.goal.c.owner_profile_id == owner_profile_id)
+                .order_by(t.goal.c.id)
+            ).all()
+        return [_goal(r) for r in rows]
+
+    def archive_chapter_goals(self, chapter_id: int) -> list[int]:
+        with self._engine.begin() as c:
+            rows = c.execute(
+                update(t.goal)
+                .where(t.goal.c.chapter_id == chapter_id)
+                .where(t.goal.c.archived_at.is_(None))
+                .values(archived_at=func.now())
+                .returning(t.goal.c.id)
+            ).all()
+        return [r.id for r in rows]
+
     def update_goal(self, goal_id: int, fields: dict) -> Goal | None:
         with self._engine.begin() as c:
-            c.execute(
-                update(t.goal).where(t.goal.c.id == goal_id).values(**fields)
-            )
-            row = c.execute(
-                select(t.goal).where(t.goal.c.id == goal_id)
-            ).one_or_none()
+            c.execute(update(t.goal).where(t.goal.c.id == goal_id).values(**fields))
+            row = c.execute(select(t.goal).where(t.goal.c.id == goal_id)).one_or_none()
         return _goal(row) if row else None
+
+    def advance_carry_over(self, goal_id: int) -> int:
+        with self._engine.begin() as c:
+            new_count = c.execute(
+                update(t.goal_state)
+                .where(t.goal_state.c.goal_id == goal_id)
+                .values(carry_over_count=t.goal_state.c.carry_over_count + 1)
+                .returning(t.goal_state.c.carry_over_count)
+            ).scalar()
+        return int(new_count)
+
+    def reset_carry_over(self, goal_id: int) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.goal_state)
+                .where(t.goal_state.c.goal_id == goal_id)
+                .values(carry_over_count=0)
+            )
+
+    def get_carry_over_count(self, goal_id: int) -> int:
+        with self._engine.connect() as c:
+            count = c.execute(
+                select(t.goal_state.c.carry_over_count).where(
+                    t.goal_state.c.goal_id == goal_id
+                )
+            ).scalar()
+        return int(count) if count is not None else 0
+
+    def get_goal_state(self, goal_id: int) -> GoalState:
+        with self._engine.connect() as c:
+            row = c.execute(
+                select(t.goal_state).where(t.goal_state.c.goal_id == goal_id)
+            ).one_or_none()
+        if row is None:
+            return GoalState(goal_id=goal_id)
+        return GoalState(
+            goal_id=row.goal_id,
+            rotation_index=row.rotation_index,
+            last_completed_at=row.last_completed_at,
+            carry_over_count=row.carry_over_count,
+        )
+
+    def advance_rotation(self, goal_id: int, sequence_len: int) -> int:
+        new_index = rotation_next_index(
+            self.get_goal_state(goal_id).rotation_index, sequence_len
+        )
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.goal_state)
+                .where(t.goal_state.c.goal_id == goal_id)
+                .values(rotation_index=new_index, last_completed_at=func.now())
+            )
+        return new_index
+
+    def set_last_completed(self, goal_id: int, when: datetime) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.goal_state)
+                .where(t.goal_state.c.goal_id == goal_id)
+                .values(last_completed_at=when)
+            )
+
+    def set_goal_archived(self, goal_id: int, when: datetime | None) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.goal).where(t.goal.c.id == goal_id).values(archived_at=when)
+            )
+
+    def set_versions_lifecycle(
+        self, goal_id: int, from_state: str, to_state: str
+    ) -> int:
+        """Flip the goal's versions from one lifecycle state to another
+        (pause: active→paused; activate: paused→active). Returns rows changed."""
+        with self._engine.begin() as c:
+            res = c.execute(
+                update(t.goal_version)
+                .where(t.goal_version.c.goal_id == goal_id)
+                .where(t.goal_version.c.lifecycle == from_state)
+                .values(lifecycle=to_state)
+            )
+        return res.rowcount
+
+    def set_rotation_pointer(self, goal_id: int, position: int) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.goal_state)
+                .where(t.goal_state.c.goal_id == goal_id)
+                .values(rotation_index=position)
+            )
+
+    def list_active_insights(self, person_id: int) -> list[Insight]:
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(t.insight)
+                .where(t.insight.c.person_id == person_id)
+                .where(t.insight.c.status == "active")
+                .order_by(t.insight.c.id)
+            ).all()
+        return [
+            Insight(
+                id=r.id,
+                person_id=r.person_id,
+                content=r.content,
+                status=r.status,
+                derived_from=r.derived_from,
+            )
+            for r in rows
+        ]

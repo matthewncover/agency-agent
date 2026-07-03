@@ -22,6 +22,12 @@ class ProfileRepositoryPort(ABC):
     def list_group_members(self, group_profile_id: int) -> list[int]: ...
 
     @abstractmethod
+    def list_groups_for_person(self, person_id: int) -> list[int]:
+        """The group_profile ids this person is a member of — the inverse of
+        list_group_members. Drives group-goal fan-out (B7)."""
+        ...
+
+    @abstractmethod
     def add_group_member(
         self, group_profile_id: int, member_person_id: int
     ) -> None: ...

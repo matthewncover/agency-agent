@@ -16,15 +16,17 @@ TODAY = date(2026, 6, 27)
 
 def _setup_goal(goal_repo, person_id):
     g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="test"))
-    v = goal_repo.create_goal_version(GoalVersion(
-        goal_id=g.id,
-        version_no=1,
-        level=Level.NEED,
-        definition="bar",
-        recurrence_type=RecurrenceType.DAILY,
-        recurrence_config={},
-        completion_type=CompletionType.BINARY,
-    ))
+    v = goal_repo.create_goal_version(
+        GoalVersion(
+            goal_id=g.id,
+            version_no=1,
+            level=Level.NEED,
+            definition="bar",
+            recurrence_type=RecurrenceType.DAILY,
+            recurrence_config={},
+            completion_type=CompletionType.BINARY,
+        )
+    )
     return g, v
 
 
@@ -42,11 +44,13 @@ def test_add_plan_item_pins_version(goal_repo, plan_repo, person_id):
     g, v = _setup_goal(goal_repo, person_id)
     plan = plan_repo.get_or_create_plan(person_id, TODAY)
 
-    item = plan_repo.add_plan_item(DailyPlanItem(
-        daily_plan_id=plan.id,
-        goal_id=g.id,
-        goal_version_id=v.id,
-    ))
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(
+            daily_plan_id=plan.id,
+            goal_id=g.id,
+            goal_version_id=v.id,
+        )
+    )
     assert item.id is not None
     assert item.goal_version_id == v.id
     assert item.status == PlanItemStatus.PLANNED
@@ -56,9 +60,13 @@ def test_add_plan_item_pins_version(goal_repo, plan_repo, person_id):
 def test_set_item_outcome_not_done(goal_repo, plan_repo, person_id):
     g, v = _setup_goal(goal_repo, person_id)
     plan = plan_repo.get_or_create_plan(person_id, TODAY)
-    item = plan_repo.add_plan_item(DailyPlanItem(
-        daily_plan_id=plan.id, goal_id=g.id, goal_version_id=v.id,
-    ))
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(
+            daily_plan_id=plan.id,
+            goal_id=g.id,
+            goal_version_id=v.id,
+        )
+    )
 
     updated = plan_repo.set_item_outcome(item.id, PlanItemStatus.NOT_DONE)
     assert updated.status == PlanItemStatus.NOT_DONE
@@ -76,9 +84,13 @@ def test_lock_in_sets_explicit_flag(goal_repo, plan_repo, person_id):
 def test_get_plan_for_date_round_trip(goal_repo, plan_repo, person_id):
     g, v = _setup_goal(goal_repo, person_id)
     plan = plan_repo.get_or_create_plan(person_id, TODAY)
-    plan_repo.add_plan_item(DailyPlanItem(
-        daily_plan_id=plan.id, goal_id=g.id, goal_version_id=v.id,
-    ))
+    plan_repo.add_plan_item(
+        DailyPlanItem(
+            daily_plan_id=plan.id,
+            goal_id=g.id,
+            goal_version_id=v.id,
+        )
+    )
 
     result = plan_repo.get_plan_for_date(person_id, TODAY)
     assert result is not None

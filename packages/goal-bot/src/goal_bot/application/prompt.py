@@ -30,7 +30,10 @@ acknowledgment — never silence, never manufactured cheer.
 _MORNING_ORDER = """\
 ## Morning touchpoint order
 
-1. Lead with wins — surface the win(s) from the data below, tied to meaning/values.
+1. Lead with wins — surface the win(s) from the data below. Tie each to its `why` / \
+meaning / values, never to a count, streak, or tally. Wins span all time (not just this \
+chapter); never surface a countdown, "days left," or a running total. Give the win at least \
+as much weight as any reflection on what didn't happen.
 2. Review yesterday — describe each item as "what shifted" not "did you fail." Items with \
 status `planned` (unanswered) are carry-overs, not failures; never reframe them as misses.
 3. Propose today's plan — offer the candidate subset as a starting point; mention the full \
@@ -60,6 +63,54 @@ There is nothing to surface from wins today. Give a brief meaning-linked acknowl
 never silence, never manufactured cheer.
 """
 
+_FRAMING_INSTRUCTION = """\
+## Framing at the margin (phrasing only — a light touch)
+
+The excerpt below is from the person's authored Tier-1 profile. Use it to tune *phrasing \
+only* — never to branch behavior, gate a feature, or change what you offer. Match their \
+grain: action-framed vs. evidence-framed, a decline-able dare vs. a meaning-tied \
+achievement. Evidence caveat: this is the weakest evidence layer in the system — a gentle \
+nudge on wording, never load-bearing. When in doubt, fall back to the plain autonomy-\
+supportive voice.
+"""
+
+_HYPOTHESIS_INSTRUCTION = """\
+## Tier-3 patterns — offer as hypotheses, never verdicts
+
+The digest below holds patterns the system *thinks it might* see. If one is relevant, \
+raise it as a hypothesis the person confirms or rejects ("I might be wrong, but these seem \
+to slip after short-sleep nights — does that track?"), never as a fact or diagnosis. The \
+person owns the legitimacy call. Never state a pattern relative to anyone else.
+"""
+
+# How an accepted reassessment offer maps to a lifecycle tool. NEVER fire any of
+# these without the person's explicit choice in the conversation (never auto-drop).
+_REASSESS_ACTIONS = """\
+Offer the options that fit `goal_type`, then let the PERSON choose. Only after an
+explicit choice, execute it:
+- recurring → **re-anchor**: `create_goal_version` at the lower (95%-floor) bar,
+  same goal_id · **retire/redirect**: `set_goal_lifecycle(goal_id, "archive")`
+  ("put the energy somewhere that matters more") · **pause**:
+  `set_goal_lifecycle(goal_id, "pause")` (dormant, not dropped).
+- one-off → **still a need** (keep, no write) · **move to a want**:
+  `create_goal_version` at level "want" · **drop**:
+  `set_goal_lifecycle(goal_id, "archive")` — drop is offered here and only here.
+Never auto-drop: if the person doesn't choose, nothing changes. You only offer.
+A re-anchor is instant and at the owner's discretion — no cool-down, no lecture.
+"""
+
+# The one path that ever exposes a miss count — and only after explicit assent.
+_NAME_THE_BAR_GATE = """\
+## Name-the-bar gate (the miss count is behind an explicit yes)
+
+If a chronic-miss pattern comes up, lead with the bar's calibration and an offer ("the bar \
+may be sitting above your floor — want to look at it together?"), with NO count and NO \
+day-by-day in that opening. Only if the person explicitly says yes may you call \
+`get_miss_detail(goal_id)` to fetch the count/dates, and even then present it as calibration \
+data, never as a headline, a scoreboard, or a judgment. If they don't assent, you never \
+fetch it and never mention a number. Never name any of this relative to a partner.
+"""
+
 
 def build_system_prompt(ctx: MorningContext) -> str:
     parts = [
@@ -67,10 +118,17 @@ def build_system_prompt(ctx: MorningContext) -> str:
         _RULES,
         _MORNING_ORDER,
         _PHRASING_RULES,
+        _NAME_THE_BAR_GATE,
     ]
 
     if ctx.thin_day:
         parts.append(_THIN_DAY_INSTRUCTION)
+
+    if ctx.framing_excerpt:
+        parts.append(_FRAMING_INSTRUCTION)
+
+    if ctx.hypotheses:
+        parts.append(_HYPOTHESIS_INSTRUCTION)
 
     parts.append("## Today's data\n")
     parts.append(f"person_id: {ctx.person_id}\nplan_date: {ctx.plan_date}\n")
@@ -103,5 +161,56 @@ def build_system_prompt(ctx: MorningContext) -> str:
         + json.dumps([c.model_dump() for c in ctx.full_list], indent=2)
         + "\n"
     )
+
+    if ctx.framing_excerpt:
+        parts.append(
+            "### Profile excerpt (framing at the margin — phrasing only)\n"
+            + ctx.framing_excerpt
+            + "\n"
+        )
+
+    if ctx.hypotheses:
+        parts.append(
+            "### Tier-3 patterns (hypotheses to confirm/reject — not verdicts)\n"
+            + json.dumps([h.model_dump() for h in ctx.hypotheses], indent=2)
+            + "\n"
+        )
+
+    if ctx.group_block:
+        parts.append(
+            "### Shared goals (separate block — do NOT interleave with the plan)\n"
+            "These are household/shared goals. Present them as their own block, "
+            "after the individual plan. Either person doing one marks it done for "
+            "both. Never compare or rank the two people — the partner is a "
+            "witness, not a scoreboard; name no one relative to the other.\n"
+            + json.dumps([c.model_dump() for c in ctx.group_block], indent=2)
+            + "\n"
+        )
+
+    if ctx.shared_notices:
+        parts.append(
+            "### Shared-goal notes (neutral, optional to raise)\n"
+            + json.dumps(ctx.shared_notices, indent=2)
+            + "\n"
+        )
+
+    if ctx.reassessment is not None:
+        # Deterministic injection — the bar may be above the floor. Offer only,
+        # NO count travels in this payload (structural gate). A miss count
+        # surfaces ONLY via get_miss_detail after the person explicitly agrees
+        # to look (never a headline). Do not name a streak.
+        parts.append(
+            "### Reassessment offer (only if the moment is right)\n"
+            "One goal has been sliding for a while. If — and only if — it comes "
+            "up naturally, you may gently offer to revisit it. Lead with the "
+            'offer and rationale ("the bar may be above your floor — your '
+            'call"), never a miss count and never a streak. There is no count '
+            "in this payload by design; fetch it with get_miss_detail ONLY if "
+            "the person explicitly agrees to look. Do not headline it; wins "
+            "still lead the touchpoint.\n"
+            + json.dumps(ctx.reassessment.model_dump(), indent=2)
+            + "\n"
+            + _REASSESS_ACTIONS
+        )
 
     return "\n".join(parts)

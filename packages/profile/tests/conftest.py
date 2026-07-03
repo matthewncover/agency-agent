@@ -9,7 +9,9 @@ from sqlalchemy import text
 def repo(migrated_engine):
     yield SqlAlchemyProfileRepository(migrated_engine)
     with migrated_engine.begin() as c:
-        c.execute(text(
-            "TRUNCATE profile.profile, profile.person, profile.group_profile, "
-            "profile.group_member, profile.profile_doc RESTART IDENTITY CASCADE"
-        ))
+        c.execute(
+            text(
+                "TRUNCATE profile.profile, profile.person, profile.group_profile, "
+                "profile.group_member, profile.profile_doc RESTART IDENTITY CASCADE"
+            )
+        )

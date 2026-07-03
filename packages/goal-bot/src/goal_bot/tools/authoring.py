@@ -7,7 +7,9 @@ from goal_bot.application.use_cases import GoalUseCases
 
 def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
     @mcp.tool
-    def create_chapter(owner: int, start: date, end: date, label: str | None = None) -> int:
+    def create_chapter(
+        owner: int, start: date, end: date, label: str | None = None
+    ) -> int:
         """Create a new chapter and return its id."""
         return uc.create_chapter(owner, start, end, label)
 

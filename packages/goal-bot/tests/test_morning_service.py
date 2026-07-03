@@ -27,7 +27,13 @@ def _build_service(migrated_engine, fake: FakeLLM) -> MorningService:
 @pytest.mark.integration
 def test_fire_morning_creates_plan_and_returns_session(migrated_engine):
     pid = seed_demo(migrated_engine)
-    fake = FakeLLM([LLMResponse(text="Good morning! Yesterday you moved — that anchors everything.")])
+    fake = FakeLLM(
+        [
+            LLMResponse(
+                text="Good morning! Yesterday you moved — that anchors everything."
+            )
+        ]
+    )
     service = _build_service(migrated_engine, fake)
 
     session = service.fire_morning(pid, TODAY)
@@ -57,12 +63,21 @@ def test_handle_reply_persists_done(migrated_engine):
     first_item_id = items[0].id
 
     # Build a second service with FakeLLM scripted for the reply turn
-    fake_reply = FakeLLM([
-        LLMResponse(text="", tool_calls=[
-            ToolCall(id="tc1", name="log_outcome", args={"daily_plan_item_id": first_item_id, "status": "done"})
-        ]),
-        LLMResponse(text="Logged!"),
-    ])
+    fake_reply = FakeLLM(
+        [
+            LLMResponse(
+                text="",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="log_outcome",
+                        args={"daily_plan_item_id": first_item_id, "status": "done"},
+                    )
+                ],
+            ),
+            LLMResponse(text="Logged!"),
+        ]
+    )
     service2 = _build_service(migrated_engine, fake_reply)
     session = service2.handle_reply(session, "did the 20-min move")
 
@@ -76,10 +91,12 @@ def test_re_fire_morning_is_idempotent(migrated_engine):
     pid = seed_demo(migrated_engine)
     plans_repo = SqlAlchemyPlanRepository(migrated_engine)
 
-    fake = FakeLLM([
-        LLMResponse(text="Morning 1!"),
-        LLMResponse(text="Morning 2!"),
-    ])
+    fake = FakeLLM(
+        [
+            LLMResponse(text="Morning 1!"),
+            LLMResponse(text="Morning 2!"),
+        ]
+    )
     service = _build_service(migrated_engine, fake)
 
     service.fire_morning(pid, TODAY)

@@ -8,7 +8,9 @@ from goal_bot.application.morning_context import (
 from goal_bot.application.prompt import build_system_prompt
 
 _TODAY = date(2026, 6, 27)
-_CANDIDATE = CandidateItem(goal_id=1, goal_version_id=1, goal_title="Move", level="need")
+_CANDIDATE = CandidateItem(
+    goal_id=1, goal_version_id=1, goal_title="Move", level="need"
+)
 
 
 def _ctx(thin_day: bool = False, wins: list | None = None) -> MorningContext:

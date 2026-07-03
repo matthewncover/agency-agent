@@ -29,11 +29,24 @@ def register_read_tools(
         """Return the chapter active on the given date, or None."""
         return uc.get_active_chapter(owner, on)
 
+    def get_goals_for_chapter(chapter_id: int, owner: int | None = None) -> list[dict]:
+        """All goals scoped to a chapter (the re-ingest diff/rollover read).
+        Optionally owner-scoped; includes archived goals."""
+        return uc.get_goals_for_chapter(chapter_id, owner)
+
+    def get_miss_detail(goal_id: int) -> dict:
+        """Engaged-miss count + day-by-day for one goal. NAME-THE-BAR GATE
+        (OQ-COMP-1): call this ONLY after the user has explicitly agreed to look
+        at the pattern — never volunteer it, never headline the count."""
+        return uc.get_miss_detail(goal_id)
+
     available = {
         "get_full_goal_list": get_full_goal_list,
         "get_plan": get_plan,
         "get_goal_detail": get_goal_detail,
         "get_active_chapter": get_active_chapter,
+        "get_goals_for_chapter": get_goals_for_chapter,
+        "get_miss_detail": get_miss_detail,
     }
     names = list(available) if include is None else list(include)
     unknown = set(names) - set(available)

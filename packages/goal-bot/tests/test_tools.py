@@ -15,6 +15,7 @@ TODAY = date(2026, 6, 27)
 def _tool_names(server) -> set[str]:
     async def _list():
         from fastmcp import Client
+
         async with Client(server) as c:
             return {t.name for t in await c.list_tools()}
 
@@ -48,6 +49,7 @@ def test_ingestion_grant_excludes_get_plan_and_ritual_writes(migrated_engine):
 def test_add_win_via_tool(server, person_id):
     async def _call():
         from fastmcp import Client
+
         async with Client(server) as c:
             return await c.call_tool("add_win", {"owner": person_id, "text": "smoke"})
 

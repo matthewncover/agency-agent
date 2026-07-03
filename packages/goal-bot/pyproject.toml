@@ -8,6 +8,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "profile",            # workspace dep (ADR-0014: goal-bot depends on profile)
+    "task-tracker-mcp",   # workspace dep — published TaskQueryClient (ADR-0007)
     "fastmcp>=2.0",
     "anthropic>=0.40",
     "python-telegram-bot>=21",

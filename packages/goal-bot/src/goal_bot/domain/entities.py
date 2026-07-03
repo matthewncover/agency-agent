@@ -99,6 +99,16 @@ class DailyPlanItem(BaseModel):
     what_shifted: str | None = None
 
 
+class GoalState(BaseModel):
+    """Mutable per-goal runtime state (goalbot.goal_state). The pointer fields
+    drive interval/rotation surfacing; carry_over_count drives reassessment."""
+
+    goal_id: int
+    rotation_index: int | None = None
+    last_completed_at: datetime | None = None
+    carry_over_count: int = 0
+
+
 class WinLogEntry(BaseModel):
     id: int | None = None
     person_id: int
@@ -106,3 +116,15 @@ class WinLogEntry(BaseModel):
     source: str
     text: str
     created_at: datetime | None = None
+
+
+class Insight(BaseModel):
+    """A Tier-3 advisory digest entry (goalbot.insight). Surfaced to the morning
+    turn as a *hypothesis* the user confirms or rejects (D-11), never a verdict.
+    Graduates into the Tier-1 profile only on human approval (non-negotiable 9)."""
+
+    id: int | None = None
+    person_id: int
+    content: str
+    status: str = "active"  # active | proposed_for_profile | graduated | dismissed
+    derived_from: dict | None = None

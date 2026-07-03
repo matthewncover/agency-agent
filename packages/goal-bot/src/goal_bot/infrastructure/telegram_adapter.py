@@ -18,18 +18,24 @@ _log = logging.getLogger(__name__)
 
 
 class TelegramAdapter:
+    """Multi-person Telegram front end (B7). Holds a chat→person mapping; each
+    person gets their own morning job (fired at their local time) and inbound
+    messages route by chat id to the right person's session. Auth is a
+    membership check against the known chats."""
+
     def __init__(
         self,
         token: str,
-        chat_id: int,
-        person_id: int,
+        chat_person: dict[int, int],
+        persons: dict[int, Person],
         service: MorningService,
         scheduler=None,
     ) -> None:
-        self._chat_id = chat_id
-        self._person_id = person_id
+        self._chat_person = dict(chat_person)  # chat_id -> person_id
+        self._person_chat = {p: c for c, p in chat_person.items()}
+        self._persons = dict(persons)  # person_id -> Person
         self._service = service
-        self._sessions: dict[int, Session] = {}
+        self._sessions: dict[int, Session] = {}  # keyed by chat_id
 
         builder = Application.builder().token(token)
         if scheduler is not None:
@@ -46,53 +52,72 @@ class TelegramAdapter:
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text)
         )
 
-    def _auth(self, update: Update) -> bool:
+    # --- routing (pure, unit-testable) ---
+
+    def person_for_chat(self, chat_id: int | None) -> int | None:
+        return self._chat_person.get(chat_id) if chat_id is not None else None
+
+    def chat_for_person(self, person_id: int) -> int | None:
+        return self._person_chat.get(person_id)
+
+    def is_member(self, chat_id: int | None) -> bool:
+        return chat_id in self._chat_person
+
+    def _auth(self, update: Update) -> int | None:
+        """Return the routed person_id if the chat is known, else None."""
         incoming = update.effective_chat.id if update.effective_chat else None
-        ok = incoming == self._chat_id
-        if not ok:
-            _log.warning("auth rejected: incoming chat_id=%s, expected=%s", incoming, self._chat_id)
-        return ok
+        person_id = self.person_for_chat(incoming)
+        if person_id is None:
+            _log.warning("auth rejected: unknown chat_id=%s", incoming)
+        return person_id
+
+    # --- handlers ---
 
     async def _cmd_morning(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        if not self._auth(update):
+        person_id = self._auth(update)
+        if person_id is None:
             return
-        session = self._service.fire_morning(self._person_id, date.today())
-        self._sessions[self._chat_id] = session
+        chat_id = update.effective_chat.id
+        session = self._service.fire_morning(person_id, date.today())
+        self._sessions[chat_id] = session
         if session.response_text:
             await update.message.reply_text(session.response_text)
 
     async def _handle_text(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        if not self._auth(update):
+        person_id = self._auth(update)
+        if person_id is None:
             return
-        session = self._sessions.get(self._chat_id)
+        chat_id = update.effective_chat.id
+        session = self._sessions.get(chat_id)
         if not session:
             return
         session = self._service.handle_reply(session, update.message.text)
-        self._sessions[self._chat_id] = session
+        self._sessions[chat_id] = session
         if session.response_text:
             await update.message.reply_text(session.response_text)
 
     async def _cmd_whoami(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        if not self._auth(update):
+        person_id = self._auth(update)
+        if person_id is None:
             return
         await update.message.reply_text(
-            f"chat_id={update.effective_chat.id}, person_id={self._person_id}"
+            f"chat_id={update.effective_chat.id}, person_id={person_id}"
         )
 
-    async def send(self, text: str) -> None:
-        await self._app.bot.send_message(chat_id=self._chat_id, text=text)
+    async def send(self, chat_id: int, text: str) -> None:
+        await self._app.bot.send_message(chat_id=chat_id, text=text)
 
-    def run_morning_job(self, person: Person):
-        """Return an async callable for the APScheduler job."""
+    def morning_job_for(self, person_id: int):
+        """An async APScheduler job that fires *this* person's morning and sends
+        it to *their* chat."""
         service = self._service
-        person_id = self._person_id
-        chat_id = self._chat_id
+        chat_id = self._person_chat[person_id]
         sessions = self._sessions
         app = self._app
 

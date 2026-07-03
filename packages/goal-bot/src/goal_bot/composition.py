@@ -6,6 +6,9 @@ from agency_profile.infrastructure.adapters.profile_repo import (
 )
 from agency_profile.infrastructure.engine import make_engine
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import Engine
+from task_tracker.application.query_client import TaskQueryClient
+from task_tracker.infrastructure.task_query_client import PgTaskQueryClient
 
 from goal_bot.application.morning_service import MorningService
 from goal_bot.application.morning_turn import MorningTurn
@@ -19,7 +22,10 @@ from goal_bot.infrastructure.scheduler import schedule_morning
 from goal_bot.infrastructure.telegram_adapter import TelegramAdapter
 from goal_bot.server import RITUAL_TOOL_DEFS
 
-logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
 logging.getLogger("goal_bot").setLevel(logging.INFO)
 logging.getLogger("apscheduler.scheduler").setLevel(logging.INFO)
 logging.getLogger("telegram.ext.Application").setLevel(logging.INFO)
@@ -30,6 +36,14 @@ _log = logging.getLogger(__name__)
 class App:
     telegram: TelegramAdapter
     scheduler: AsyncIOScheduler
+    tasks: TaskQueryClient
+
+
+def build_task_query_client(engine: Engine) -> TaskQueryClient:
+    """The published, read-only task-tracker client goal-bot uses for
+    candidate-gathering + daily signal (ADR-0007). Not consumed by the morning
+    flow yet — that's B2/B4; B1 just exposes it."""
+    return PgTaskQueryClient(engine)
 
 
 def build_app(settings: Settings) -> App:
@@ -39,7 +53,9 @@ def build_app(settings: Settings) -> App:
     goals = SqlAlchemyGoalRepository(engine)
     plans = SqlAlchemyPlanRepository(engine)
     wins = SqlAlchemyWinRepository(engine)
-    uc = GoalUseCases(goals=goals, plans=plans, wins=wins)
+    profiles = SqlAlchemyProfileRepository(engine)
+    uc = GoalUseCases(goals=goals, plans=plans, wins=wins, profiles=profiles)
+    tasks = build_task_query_client(engine)
     _log.info("build_app: use-cases ready")
 
     llm = AnthropicLLMAdapter(
@@ -48,33 +64,46 @@ def build_app(settings: Settings) -> App:
     )
     _log.info("build_app: LLM adapter ready")
     turn = MorningTurn(llm=llm, uc=uc, tool_defs=RITUAL_TOOL_DEFS)
-    service = MorningService(goals=goals, plans=plans, wins=wins, turn=turn)
+    service = MorningService(
+        goals=goals,
+        plans=plans,
+        wins=wins,
+        turn=turn,
+        tasks=tasks,
+        profiles=profiles,
+    )
     _log.info("build_app: service ready")
+
+    # Resolve the chat→person mapping (B7). One entry = the A7 single-user case;
+    # two = you + your partner, each keyed to their own chat + local morning.
+    pairs = settings.chat_person_pairs()
+    chat_person = {chat_id: person_id for chat_id, person_id in pairs}
+    persons = {person_id: profiles.get_person(person_id) for _chat, person_id in pairs}
+    _log.info("build_app: chat→person map = %s", chat_person)
 
     scheduler = AsyncIOScheduler()
     _log.info("build_app: building TelegramAdapter")
     telegram = TelegramAdapter(
         token=settings.telegram_bot_token,
-        chat_id=settings.telegram_chat_id,
-        person_id=settings.person_id,
+        chat_person=chat_person,
+        persons=persons,
         service=service,
         scheduler=scheduler,
     )
     _log.info("build_app: TelegramAdapter ready")
 
-    _log.info("build_app: fetching person from DB")
-    person = SqlAlchemyProfileRepository(engine).get_person(settings.person_id)
-    _log.info("build_app: person=%s", person)
+    # One morning job per person, each at their own local time.
+    for person_id, person in persons.items():
+        schedule_morning(
+            scheduler,
+            run_morning=telegram.morning_job_for(person_id),
+            person=person,
+            debug_interval=settings.debug_morning_interval or None,
+            job_id=f"morning-{person_id}",
+        )
+    _log.info("build_app: scheduled %d morning job(s)", len(persons))
 
-    schedule_morning(
-        scheduler,
-        run_morning=telegram.run_morning_job(person),
-        person=person,
-        debug_interval=settings.debug_morning_interval or None,
-    )
-    _log.info("build_app: schedule_morning done")
-
-    return App(telegram=telegram, scheduler=scheduler)
+    return App(telegram=telegram, scheduler=scheduler, tasks=tasks)
 
 
 def run() -> None:

@@ -2,6 +2,7 @@
 Tests for the scheduler wiring in composition — no network, no DB.
 Tests schedule_morning directly (the part build_app delegates to).
 """
+
 from datetime import time
 
 from agency_profile.domain.entities import Person

@@ -21,9 +21,11 @@ def seed_person(
 ) -> int:
     """Create a single person profile and return its id. No goals/chapters —
     this is the owner id real ingestion writes against."""
-    return SqlAlchemyProfileRepository(engine).create_person(
-        Person(display_name=display_name, timezone=timezone)
-    ).profile_id
+    return (
+        SqlAlchemyProfileRepository(engine)
+        .create_person(Person(display_name=display_name, timezone=timezone))
+        .profile_id
+    )
 
 
 # --- the "toy dataset" ---
@@ -57,28 +59,37 @@ _STEP_OBS = [
     "waking up later and feeling rushed out the door - need to shift bedtime earlier",
     "feeling gassed after work - this is silly, walking isn't strenuous and is a "
     "genuine winddown",
-    "\"I got a bunch of steps in yesterday I'm good today\" - reminder that my "
+    '"I got a bunch of steps in yesterday I\'m good today" - reminder that my '
     "parents walk 2x my steps every day",
 ]
 _WORKOUT_OBS = [
-    "\"Muscles need breaks, I can take another day off\" - this is a lie. the "
+    '"Muscles need breaks, I can take another day off" - this is a lie. the '
     "literature says its a lie",
     "feeling gassed - reminder that this is an insanely easy workout and it's the "
     "minimum",
-    "\"I don't have access to a pullup bar today\" - great, do more pushups",
+    '"I don\'t have access to a pullup bar today" - great, do more pushups',
 ]
-_ERRAND_OBS = ["\"I'm busy today with { bs }\" - you can make small moves today"]
+_ERRAND_OBS = ['"I\'m busy today with { bs }" - you can make small moves today']
 
 # The eight oneoff/binary errands: (title, personal task_ref_id, extra obstacles).
 _ERRANDS = [
-    ("Renew passport", 3, [
-        "\"I'm not going to Slovenia so no rush on my passport\" - dawg, you don't "
-        "know when you might need it",
-    ]),
+    (
+        "Renew passport",
+        3,
+        [
+            "\"I'm not going to Slovenia so no rush on my passport\" - dawg, you don't "
+            "know when you might need it",
+        ],
+    ),
     ("Re-register TSA precheck", 4, []),
-    ("Register Bronco in CA", 1, [
-        "\"I can get away with Arizona plates in CA\" - until you dont get away with it?",
-    ]),
+    (
+        "Register Bronco in CA",
+        1,
+        [
+            '"I can get away with Arizona plates in CA" - '
+            "until you dont get away with it?",
+        ],
+    ),
     ("Cancel boxing membership", 71, []),
     ("Get money from Brian Lee", 50, []),
     ("Capital One statements audit", 72, []),
@@ -91,59 +102,110 @@ def _real_chapter_goals(ch: int) -> list[dict]:
     """The 11 goals from the real first chapter, as create_goals specs."""
     goals: list[dict] = [
         {
-            "title": "step goal", "chapter_id": ch,
+            "title": "step goal",
+            "chapter_id": ch,
             "versions": [
-                {"level": "need", "definition": "5,000 steps", "why": _WHY_STEPS,
-                 "recurrence_type": "daily", "recurrence_config": {},
-                 "completion_type": "quantity", "target_quantity": 5000,
-                 "quantity_unit": "steps", "obstacles": _STEP_OBS},
-                {"level": "want", "definition": "7,000 steps", "why": _WHY_STEPS,
-                 "recurrence_type": "daily", "recurrence_config": {},
-                 "completion_type": "quantity", "target_quantity": 7000,
-                 "quantity_unit": "steps", "obstacles": _STEP_OBS},
+                {
+                    "level": "need",
+                    "definition": "5,000 steps",
+                    "why": _WHY_STEPS,
+                    "recurrence_type": "daily",
+                    "recurrence_config": {},
+                    "completion_type": "quantity",
+                    "target_quantity": 5000,
+                    "quantity_unit": "steps",
+                    "obstacles": _STEP_OBS,
+                },
+                {
+                    "level": "want",
+                    "definition": "7,000 steps",
+                    "why": _WHY_STEPS,
+                    "recurrence_type": "daily",
+                    "recurrence_config": {},
+                    "completion_type": "quantity",
+                    "target_quantity": 7000,
+                    "quantity_unit": "steps",
+                    "obstacles": _STEP_OBS,
+                },
             ],
         },
         {
-            "title": "pushups", "chapter_id": ch,
+            "title": "pushups",
+            "chapter_id": ch,
             "versions": [
-                {"level": "need",
-                 "definition": "50 pushups (4s eccentric), every 4 days",
-                 "why": _WHY_WORKOUT, "recurrence_type": "interval",
-                 "recurrence_config": {"every_days": 4}, "completion_type": "quantity",
-                 "target_quantity": 50, "quantity_unit": "reps", "obstacles": _WORKOUT_OBS},
-                {"level": "want",
-                 "definition": "75 pushups (4s eccentric), every 4 days",
-                 "why": _WHY_WORKOUT, "recurrence_type": "interval",
-                 "recurrence_config": {"every_days": 4}, "completion_type": "quantity",
-                 "target_quantity": 75, "quantity_unit": "reps", "obstacles": _WORKOUT_OBS},
+                {
+                    "level": "need",
+                    "definition": "50 pushups (4s eccentric), every 4 days",
+                    "why": _WHY_WORKOUT,
+                    "recurrence_type": "interval",
+                    "recurrence_config": {"every_days": 4},
+                    "completion_type": "quantity",
+                    "target_quantity": 50,
+                    "quantity_unit": "reps",
+                    "obstacles": _WORKOUT_OBS,
+                },
+                {
+                    "level": "want",
+                    "definition": "75 pushups (4s eccentric), every 4 days",
+                    "why": _WHY_WORKOUT,
+                    "recurrence_type": "interval",
+                    "recurrence_config": {"every_days": 4},
+                    "completion_type": "quantity",
+                    "target_quantity": 75,
+                    "quantity_unit": "reps",
+                    "obstacles": _WORKOUT_OBS,
+                },
             ],
         },
         {
-            "title": "pull-ups", "chapter_id": ch,
+            "title": "pull-ups",
+            "chapter_id": ch,
             "versions": [
-                {"level": "need",
-                 "definition": "20 pull-ups (4s eccentric), every 4 days",
-                 "why": _WHY_WORKOUT, "recurrence_type": "interval",
-                 "recurrence_config": {"every_days": 4}, "completion_type": "quantity",
-                 "target_quantity": 20, "quantity_unit": "reps", "obstacles": _WORKOUT_OBS},
-                {"level": "want",
-                 "definition": "30 pull-ups (4s eccentric), every 4 days",
-                 "why": _WHY_WORKOUT, "recurrence_type": "interval",
-                 "recurrence_config": {"every_days": 4}, "completion_type": "quantity",
-                 "target_quantity": 30, "quantity_unit": "reps", "obstacles": _WORKOUT_OBS},
+                {
+                    "level": "need",
+                    "definition": "20 pull-ups (4s eccentric), every 4 days",
+                    "why": _WHY_WORKOUT,
+                    "recurrence_type": "interval",
+                    "recurrence_config": {"every_days": 4},
+                    "completion_type": "quantity",
+                    "target_quantity": 20,
+                    "quantity_unit": "reps",
+                    "obstacles": _WORKOUT_OBS,
+                },
+                {
+                    "level": "want",
+                    "definition": "30 pull-ups (4s eccentric), every 4 days",
+                    "why": _WHY_WORKOUT,
+                    "recurrence_type": "interval",
+                    "recurrence_config": {"every_days": 4},
+                    "completion_type": "quantity",
+                    "target_quantity": 30,
+                    "quantity_unit": "reps",
+                    "obstacles": _WORKOUT_OBS,
+                },
             ],
         },
     ]
     for title, ref_id, extra_obs in _ERRANDS:
-        goals.append({
-            "title": title, "chapter_id": ch,
-            "versions": [{
-                "level": "need", "definition": title, "why": _WHY_ERRANDS,
-                "recurrence_type": "oneoff", "recurrence_config": {},
-                "completion_type": "binary", "task_ref_source": "personal",
-                "task_ref_id": ref_id, "obstacles": _ERRAND_OBS + extra_obs,
-            }],
-        })
+        goals.append(
+            {
+                "title": title,
+                "chapter_id": ch,
+                "versions": [
+                    {
+                        "level": "need",
+                        "definition": title,
+                        "why": _WHY_ERRANDS,
+                        "recurrence_type": "oneoff",
+                        "recurrence_config": {},
+                        "completion_type": "binary",
+                        "task_ref_source": "personal",
+                        "task_ref_id": ref_id,
+                        "obstacles": _ERRAND_OBS + extra_obs,
+                    }
+                ],
+            }
+        )
     return goals
 
 
@@ -153,25 +215,40 @@ def _coverage_goals(ch: int) -> list[dict]:
     in get_full_goal_list)."""
     return [
         {
-            "title": "Meditate", "chapter_id": ch,
+            "title": "Meditate",
+            "chapter_id": ch,
             "versions": [
-                {"level": "need", "definition": "5 minutes of breath awareness",
-                 "recurrence_type": "daily", "recurrence_config": {},
-                 "completion_type": "binary",
-                 "why": "floor that maintains the practice on hard days"},
-                {"level": "want", "definition": "20 minutes with a timer",
-                 "recurrence_type": "daily", "recurrence_config": {},
-                 "completion_type": "binary",
-                 "why": "depth session when conditions are right"},
+                {
+                    "level": "need",
+                    "definition": "5 minutes of breath awareness",
+                    "recurrence_type": "daily",
+                    "recurrence_config": {},
+                    "completion_type": "binary",
+                    "why": "floor that maintains the practice on hard days",
+                },
+                {
+                    "level": "want",
+                    "definition": "20 minutes with a timer",
+                    "recurrence_type": "daily",
+                    "recurrence_config": {},
+                    "completion_type": "binary",
+                    "why": "depth session when conditions are right",
+                },
             ],
         },
         {
-            "title": "Review inbox", "chapter_id": None,
-            "versions": [{
-                "level": "need", "definition": "clear to zero or defer everything",
-                "recurrence_type": "daily", "recurrence_config": {},
-                "completion_type": "binary", "why": "clear head for deep work",
-            }],
+            "title": "Review inbox",
+            "chapter_id": None,
+            "versions": [
+                {
+                    "level": "need",
+                    "definition": "clear to zero or defer everything",
+                    "recurrence_type": "daily",
+                    "recurrence_config": {},
+                    "completion_type": "binary",
+                    "why": "clear head for deep work",
+                }
+            ],
         },
     ]
 
@@ -189,7 +266,12 @@ def seed_demo(
     today = _today()
     # Real chapter ran 2026-06-15 → 2026-07-20 (~5 weeks, ~2 weeks in by 6/28).
     # Anchor relative to today so the toy chapter is always active when seeded.
-    ch = uc.create_chapter(pid, today - timedelta(weeks=2), today + timedelta(weeks=3), None)
+    ch = uc.create_chapter(
+        pid,
+        today - timedelta(weeks=2),
+        today + timedelta(weeks=3),
+        None,
+    )
 
     uc.create_goals(pid, _real_chapter_goals(ch) + _coverage_goals(ch))
 

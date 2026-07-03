@@ -36,8 +36,33 @@ run**, don't work from memory:
 
 Authoring: `create_goals`, `create_goal_versions` (batch — **prefer these**),
 `create_chapter`, `create_goal`, `create_goal_version` (singles), `update_goal`.
-Reads: `get_active_chapter`, `get_full_goal_list`, `get_goal_detail`.
+Reads: `get_active_chapter`, `get_full_goal_list`, `get_goal_detail`,
+`get_goals_for_chapter`.
+Deterministic goal-setting / re-ingest ops (B2): `propose_candidates`,
+`diff_chapter`, `rollover`, `check_goal_scope`.
 (No `get_plan`, no ritual/outcome writes — out of grant by design.)
+
+**Identity is the tools' job, not yours.** `diff_chapter` / `rollover` /
+`check_goal_scope` decide new-vs-version, what carries forward, and scope flags
+*deterministically* behind the boundary. You parse loose markdown and run the
+confirm queue; you do **not** re-identify goals by eyeballing content (the
+failure mode goal-markdown §5.1 exists to avoid). Feed the tools structured
+input, act on what they return.
+
+- `propose_candidates(owner)` → `{goals:[past goals], tasks:[open tier-2/3
+  personal]}`. Use this to seed goal-setting — propose *from* it; don't rely on
+  recall or re-query. Work tasks never appear (ADR-0005).
+- `diff_chapter(chapter_id, parsed)` — `parsed` is a list of
+  `{gid?, title, definition, recurrence_type, target_quantity?}`. Returns one
+  classification per goal: `new` / `version_bump` / `unchanged` / `ambiguous`
+  (version-vs-new-goal, `default: version_bump`) / `unknown_gid`, plus
+  `archived` for any recorded goal that vanished from the markdown (§5.4).
+- `rollover(owner, start, end, carried, label?)` — opens the new chapter, mints
+  `carried` (`[{title, versions:[...]}]`) as **fresh** goals scoped to it, and
+  archives the prior chapter's goals. No cross-chapter lineage (ADR-0013).
+  Returns `{chapter_id, new_goal_ids, archived_goal_ids}`.
+- `check_goal_scope(goal_owner_id, chapter_id)` → `{confirm_required, reason}`.
+  Call before writing a goal into a chapter (see the confirm queue).
 
 **Batch by default — one call beats N round-trips:**
 - `create_goals(owner, goals)` — create all new goals for the run in ONE call,
@@ -67,27 +92,43 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
 ## Workflow
 
 1. **Resolve owner; read the source file** (use Read on the Obsidian path).
-2. **Read current state** to classify the run:
-   - `get_active_chapter(owner, today)` → none, and the file has goals → first
-     ingest. File's date header is a *new* window → rollover: `create_chapter`,
-     carried-forward goals become fresh goals with new `gid`s (§5.5). Header
-     matches the open chapter → mid-chapter re-ingest: resolve `gid`s, diff with
-     `get_full_goal_list` + `get_goal_detail`, edits become new versions (§5.2).
-3. **Parse** per goal-markdown §3 (ownership, levels, explode buckets, splits,
-   cadence). `why` is required; reject a goal without one.
-4. **One-off ↔ task-tracker promotion** (see section below).
-5. **Build the confirm queue in chat** — only what needs the human: quota-vs-
-   fixed, bucket explode, multi-measure split, version-vs-new-goal, tag
-   proposals, uncertain task matches. Show inferred fields inline so silent
-   inferences stay visible. **Nothing commits until the queue clears.**
-6. **Write** via the tools — use `create_goals` (and `create_goal_versions` for
-   re-ingest bumps) to do it in as few calls as possible, not one goal at a time.
+2. **Parse** per goal-markdown §3 (ownership, levels, explode buckets, splits,
+   cadence). `why` is required; reject a goal without one. This is your job —
+   the loose-markdown → structured-record step.
+3. **Classify the run by the file's date header** vs `get_active_chapter(owner,
+   today)` — and let the tools resolve identity, don't diff by hand:
+   - **Header is a new window** → **rollover.** Call `rollover(owner, start,
+     end, carried, label?)` with the carried-forward goals; it mints fresh
+     `gid`s in the new chapter and archives the prior one (§5.5). Do **not**
+     hand-roll `create_chapter` + archive.
+   - **Header matches the open chapter** → **mid-chapter re-ingest.** Call
+     `diff_chapter(chapter_id, parsed)` and act on its classifications (step 5).
+     Don't re-derive new-vs-version yourself (§5.2).
+   - **First ingest** (no chapter, file has goals) → `create_chapter`, then
+     `create_goals`.
+4. **One-off ↔ task-tracker promotion** (see section below). For goal-setting
+   from scratch, seed candidates with `propose_candidates(owner)`.
+5. **Build the confirm queue in chat** — only what needs the human. Route the
+   tools' outputs *into* the queue; don't re-decide them:
+   - `diff_chapter` → `ambiguous` **is** a version-vs-new-goal item (offer the
+     `default: version_bump`); `archived` → surface "archived: X, Y — unarchive
+     if unintended" (§5.4); `unknown_gid` → surface, never silently write.
+   - Before writing a goal into a chapter, call `check_goal_scope(goal_owner_id,
+     chapter_id)`; if `confirm_required`, add the flag (group-owned goal in an
+     individual's private chapter, ADR-0013) with its `reason`.
+   - Plus the parse-side calls: quota-vs-fixed, bucket explode, multi-measure
+     split, tag proposals, uncertain task matches.
+   Show inferred fields inline. **Nothing commits until the queue clears.**
+6. **Write** via the tools — `create_goals` for new goals, `create_goal_versions`
+   for the `version_bump` classifications, `rollover` for a new window. Batch;
+   don't write one goal at a time.
 7. **Write `gid`s back into the source file** — Edit the markdown directly,
    appending `<!--gid:N-->` to each goal heading (one per goal; each exploded
    one-off gets its own). This is the Claude Code advantage over the old
    copy-paste flow — the file is the source of truth for re-ingest.
-8. **Return the change summary**: per goal `NEW / VERSION-BUMP / UNCHANGED /
-   DUPLICATE? / ARCHIVED`, with inferred fields shown inline.
+8. **Return the change summary** — build it straight from `diff_chapter`'s
+   output (`NEW / VERSION-BUMP / UNCHANGED / ARCHIVED`, plus any `ambiguous`
+   the human resolved), with inferred fields shown inline. Don't re-classify.
 
 ## One-off goals ↔ task-tracker (promotion, ADR-0005)
 
@@ -108,12 +149,15 @@ Two cases:
    create the goal referencing it. New one-offs should exist as **both**.
 
 Matching md items to tasks is judgment — surface uncertain matches in the confirm
-queue, don't guess.
+queue, don't guess. `propose_candidates(owner)` returns the owner's open tier-2/3
+personal tasks (work excluded) — use it to find promotion candidates rather than
+free-form searching.
 
 **Ownership invariant:** a goal owned by P may only reference a task owned by P.
-Task-tracker doesn't return an owner id yet, so this can't be auto-verified —
-for now everything is owner 1, so it holds trivially. Add the check once
-task-tracker exposes owner ids.
+Task-tracker is now owner-scoped (B1): `propose_candidates` and the task client
+only ever return tasks for the given owner, so a candidate from that list already
+satisfies the invariant. Still verify any task id the human pastes in by hand
+belongs to the owner before linking.
 
 > If the task-tracker MCP isn't configured in this session, say so and fall back
 > to goal-only one-offs (no `task_ref`), or ask the user to paste task ids.
@@ -132,6 +176,7 @@ task-tracker exposes owner ids.
 ## Known limits
 
 - Tags: not writable (no write path yet) — propose only.
-- Ownership check: pending task-tracker `owner_id`.
+- Ownership check: task-tracker is owner-scoped (B1), so list-sourced candidates
+  are safe; only hand-pasted task ids still need a manual owner check.
 - Completion is one-way (MVP): the goal is source of truth; goal-bot reads task
   status but never writes back. Completing a goal won't close its task.

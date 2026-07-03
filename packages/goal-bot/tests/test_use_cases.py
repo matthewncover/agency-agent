@@ -44,26 +44,41 @@ def test_create_goals_batch(uc, person_id):
                 "chapter_id": ch_id,
                 "versions": [
                     {
-                        "level": "need", "definition": "5k", "target_quantity": 5000,
-                        "quantity_unit": "steps", "recurrence_type": "daily",
-                        "recurrence_config": {}, "completion_type": "quantity",
-                        "why": "mood", "obstacles": ["waking late", "gassed"],
+                        "level": "need",
+                        "definition": "5k",
+                        "target_quantity": 5000,
+                        "quantity_unit": "steps",
+                        "recurrence_type": "daily",
+                        "recurrence_config": {},
+                        "completion_type": "quantity",
+                        "why": "mood",
+                        "obstacles": ["waking late", "gassed"],
                     },
                     {
-                        "level": "want", "definition": "7k", "target_quantity": 7000,
-                        "quantity_unit": "steps", "recurrence_type": "daily",
-                        "recurrence_config": {}, "completion_type": "quantity",
+                        "level": "want",
+                        "definition": "7k",
+                        "target_quantity": 7000,
+                        "quantity_unit": "steps",
+                        "recurrence_type": "daily",
+                        "recurrence_config": {},
+                        "completion_type": "quantity",
                         "why": "mood",
                     },
                 ],
             },
             {  # a chapter-less one-off, defaults handled by caller
-                "title": "renew passport", "chapter_id": None,
-                "versions": [{
-                    "level": "need", "definition": "renew passport",
-                    "recurrence_type": "oneoff", "recurrence_config": {},
-                    "completion_type": "binary", "why": "close loops",
-                }],
+                "title": "renew passport",
+                "chapter_id": None,
+                "versions": [
+                    {
+                        "level": "need",
+                        "definition": "renew passport",
+                        "recurrence_type": "oneoff",
+                        "recurrence_config": {},
+                        "completion_type": "binary",
+                        "why": "close loops",
+                    }
+                ],
             },
         ],
     )
@@ -84,13 +99,17 @@ def test_create_goal_versions_batch_bumps_existing(uc, person_id):
     g1 = uc.create_goal(person_id, "a", chapter_id=None)
     g2 = uc.create_goal(person_id, "b", chapter_id=None)
     base = dict(
-        recurrence_type="daily", recurrence_config={}, completion_type="binary",
+        recurrence_type="daily",
+        recurrence_config={},
+        completion_type="binary",
     )
     uc.create_goal_version(goal_id=g1, level="need", definition="v1", **base)
-    ids = uc.create_goal_versions([
-        {"goal_id": g1, "level": "need", "definition": "v2", **base},
-        {"goal_id": g2, "level": "need", "definition": "v1", **base},
-    ])
+    ids = uc.create_goal_versions(
+        [
+            {"goal_id": g1, "level": "need", "definition": "v2", **base},
+            {"goal_id": g2, "level": "need", "definition": "v1", **base},
+        ]
+    )
     assert len(ids) == 2
     d1 = uc.get_goal_detail(g1)
     need = sorted(d1["versions"], key=lambda v: v["version_no"])

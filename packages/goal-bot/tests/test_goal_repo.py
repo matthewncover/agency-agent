@@ -65,8 +65,11 @@ def test_create_goal_version_persists_obstacles(goal_repo, person_id):
 def test_version_no_auto_assigned_and_prior_closed(goal_repo, person_id):
     g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="steps"))
     need_v1 = GoalVersion(
-        goal_id=g.id, level=Level.NEED, definition="5k",
-        recurrence_type=RecurrenceType.DAILY, recurrence_config={},
+        goal_id=g.id,
+        level=Level.NEED,
+        definition="5k",
+        recurrence_type=RecurrenceType.DAILY,
+        recurrence_config={},
         completion_type=CompletionType.BINARY,
     )
     want_v1 = need_v1.model_copy(update={"level": Level.WANT, "definition": "7k"})
@@ -83,7 +86,7 @@ def test_version_no_auto_assigned_and_prior_closed(goal_repo, person_id):
     need_versions = sorted(by_level[Level.NEED], key=lambda v: v.version_no)
     assert [v.version_no for v in need_versions] == [1, 2]
     assert need_versions[0].effective_to is not None  # prior closed
-    assert need_versions[1].effective_to is None       # new current
+    assert need_versions[1].effective_to is None  # new current
     # want is its own lineage, untouched by the need bump
     assert [v.version_no for v in by_level[Level.WANT]] == [1]
     assert by_level[Level.WANT][0].effective_to is None
@@ -91,11 +94,13 @@ def test_version_no_auto_assigned_and_prior_closed(goal_repo, person_id):
 
 @pytest.mark.integration
 def test_get_full_goal_list_includes_chapter_and_chapterless(goal_repo, person_id):
-    ch = goal_repo.create_chapter(Chapter(
-        owner_profile_id=person_id,
-        start_date=date(2026, 1, 1),
-        end_date=date(2026, 12, 31),
-    ))
+    ch = goal_repo.create_chapter(
+        Chapter(
+            owner_profile_id=person_id,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+        )
+    )
 
     g_in_chapter = goal_repo.create_goal(
         Goal(owner_profile_id=person_id, title="in-chapter", chapter_id=ch.id)
