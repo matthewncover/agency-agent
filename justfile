@@ -46,14 +46,24 @@ run:
 db-url:
     @echo $DATABASE_URL
 
+# C2: routine deploy on the VPS — ff-pull, sync, migration-pending gate,
+# restart, health check. Stops (without restarting) if migrations are pending
+# and hands you to `deploy-migrate`. Run as root on the VPS.
+deploy:
+    deploy/deploy.sh
+
 # B8: preview the pending migration plan against $DATABASE_URL, then apply it
 # only after an explicit typed confirm. Human-run, never auto-run (CLAUDE.md).
 # Point $DATABASE_URL at prod in the deploy shell, review, then confirm.
+# C2: a schema change needs a restore point first — confirm a fresh backup.
 deploy-migrate:
     @echo "== target DB ==" && echo "${DATABASE_URL%%\\?*}"
     @echo "\n== current revision ==" && uv run alembic current
     @echo "\n== history ==" && uv run alembic history --verbose
     @echo "\n== offline SQL preview (current -> head) ==" && uv run alembic upgrade --sql head
+    @printf "\nFresh backup taken (deploy/backup.sh)? Type 'backup-done' to continue: " && \
+      read bak && [ "$bak" = "backup-done" ] || \
+      { echo "aborted — run deploy/backup.sh first (restore point before schema change)"; exit 1; }
     @printf "\nApply 'alembic upgrade head' to the DB above? Type 'upgrade' to proceed: " && \
       read ans && [ "$ans" = "upgrade" ] && uv run alembic upgrade head || \
       echo "aborted — no migration applied"

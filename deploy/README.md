@@ -13,10 +13,42 @@ Artifacts in this dir:
 | file | what |
 |------|------|
 | `goal-bot.service` | systemd unit for the polling bot |
+| `deploy.sh` | routine one-command deploy: pull → sync → migration gate → restart → health check (C2) |
 | `backup.sh` | daily `pg_dump` + prune + optional offsite copy |
 | `restore.sh` | restore a dump (also used to verify a backup) |
 | `../.env.prod.example` | prod env template (fill on the server, never commit) |
-| `just deploy-migrate` | print migration plan, apply only on typed confirm |
+| `just deploy-migrate` | print migration plan, apply only on backup confirm + typed confirm |
+
+## Routine deploy (C2 — after first deploy)
+
+Ship a change already pushed to a **green** `main` (CI is the gate — the
+script doesn't check GitHub; deploying from red is on you):
+
+```sh
+ssh vps '/opt/agency-agent/deploy/deploy.sh'
+# or on the box: cd /opt/agency-agent && just deploy
+```
+
+The script (as root; repo steps drop to `goalbot`): `git pull --ff-only` →
+`uv sync --locked --all-packages` → **stop if migrations are pending** →
+`systemctl restart goal-bot` → health check (unit active + startup marker in
+the journal, else non-zero exit with the journal tail). It never applies a
+migration and never force-pulls.
+
+**When it stops on pending migrations** (in this order — the backup is the
+restore point for the schema change):
+
+```sh
+set -a; . /etc/agency-agent/agency.env; set +a
+deploy/backup.sh          # 1. restore point
+just deploy-migrate       # 2. review plan; confirms backup, then typed 'upgrade'
+just deploy               # 3. re-run the routine deploy
+```
+
+**Rollback:** code-only → as `goalbot`, `git checkout <prev-sha>` in
+`/opt/agency-agent`, re-run `deploy/deploy.sh`, then `git checkout main` once
+fixed. A migrated deploy rolls back via `restore.sh` from the pre-migration
+backup — which is why the backup step is mandatory, not documentation.
 
 ## First deploy (fresh VPS)
 
@@ -93,5 +125,6 @@ point tests at prod (same rule as A1). Going live is a one-way data step.
 
 ## Later / out of scope
 
-Webhook (needs public URL + TLS), HA/multi-region, container orchestration, CD.
+Webhook (needs public URL + TLS), HA/multi-region, container orchestration,
+push-based/auto CD (routine deploys are one human-triggered command — C2).
 Migrations stay human-gated on purpose.
