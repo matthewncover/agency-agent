@@ -1,0 +1,16 @@
+from task_tracker.tools.daily_logs import register as register_daily_logs
+from task_tracker.tools.sprints import register as register_sprints
+from task_tracker.tools.system import register as register_system
+from task_tracker.tools.tasks import register as register_tasks
+from task_tracker.tools.time_tracking import register as register_time
+
+
+def register_all(mcp, repos):
+    """Register all tools on the MCP instance. Returns dict of tool functions."""
+    tools = {}
+    tools.update(register_tasks(mcp, repos))
+    tools.update(register_time(mcp, repos))
+    tools.update(register_daily_logs(mcp, repos))
+    tools.update(register_sprints(mcp, repos))
+    tools.update(register_system(mcp, repos))
+    return tools

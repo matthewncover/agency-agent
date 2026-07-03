@@ -1,0 +1,35 @@
+[project]
+name = "task-tracker-mcp"
+version = "0.1.0"
+description = "MCP server for task and time tracking"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp>=2.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/task_tracker/tools/*.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
