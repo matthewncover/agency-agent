@@ -12,9 +12,7 @@ class SqliteSystemMetaRepositoryAdapter(SystemMetaRepositoryPort):
 
     def get(self, key: str) -> SystemMetaEntity | None:
         conn = self._conn_factory()
-        row = conn.execute(
-            "SELECT * FROM system_meta WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM system_meta WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
         d = dict(row)

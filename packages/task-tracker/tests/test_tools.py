@@ -1,21 +1,14 @@
-import sqlite3
 from types import SimpleNamespace
 
 import pytest
 
-from task_tracker.infrastructure.database import init_db
 from task_tracker.server import create_app
 
 
 @pytest.fixture
-def tools_env():
-    """Set up an in-memory DB and create a fresh app with test repos."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    init_db(conn)
-
-    _app, tools = create_app(conn_factory=lambda: conn)
+def tools_env(migrated_engine, person_id):
+    """Fresh MCP app wired to the migrated Postgres DB for a seeded person."""
+    _app, tools = create_app(engine=migrated_engine, owner_id=person_id)
     return SimpleNamespace(**tools)
 
 

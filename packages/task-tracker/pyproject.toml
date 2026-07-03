@@ -31,5 +31,6 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.ruff.lint.per-file-ignores]
 "src/task_tracker/tools/*.py" = ["E501"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
+# NB: pytest config lives in the repo-root pyproject.toml — the whole suite runs
+# under the monorepo's shared `migrated_engine` (Postgres) fixture. A local
+# [tool.pytest.ini_options] here would shadow the root config and hide it.

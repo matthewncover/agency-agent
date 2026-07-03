@@ -1,52 +1,81 @@
-import sqlite3
-
 import pytest
+from agency_profile.domain.entities import Person
+from agency_profile.infrastructure.adapters.profile_repo import (
+    SqlAlchemyProfileRepository,
+)
+from sqlalchemy import text
 
 from task_tracker.infrastructure.adapters import (
-    SqliteDailyLogRepositoryAdapter,
-    SqliteSprintRepositoryAdapter,
-    SqliteSystemMetaRepositoryAdapter,
-    SqliteTaskRepositoryAdapter,
-    SqliteTimeEntryRepositoryAdapter,
+    PgDailyLogRepositoryAdapter,
+    PgSprintRepositoryAdapter,
+    PgSystemMetaRepositoryAdapter,
+    PgTaskRepositoryAdapter,
+    PgTimeEntryRepositoryAdapter,
 )
-from task_tracker.infrastructure.database import init_db
+from task_tracker.infrastructure.task_query_client import PgTaskQueryClient
+
+# `migrated_engine` (session-scoped, builds the agency_test DB + runs Alembic
+# head) is provided by the repo-root conftest.py — shared across all packages.
+
+
+@pytest.fixture(autouse=True)
+def _clean_db(migrated_engine):
+    yield
+    with migrated_engine.begin() as c:
+        c.execute(
+            text(
+                "TRUNCATE "
+                "tasktracker.time_entries, tasktracker.daily_logs, "
+                "tasktracker.work_tasks, tasktracker.personal_tasks, "
+                "tasktracker.sprints, tasktracker.system_meta, "
+                "profile.profile_doc, profile.group_member, "
+                "profile.group_profile, profile.person, profile.profile "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
 
 
 @pytest.fixture
-def db_conn():
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    init_db(conn)
-    yield conn
-    conn.close()
+def person_id(migrated_engine):
+    p = SqlAlchemyProfileRepository(migrated_engine).create_person(
+        Person(display_name="t", timezone="America/Los_Angeles")
+    )
+    return p.profile_id
 
 
 @pytest.fixture
-def conn_factory(db_conn):
-    return lambda: db_conn
+def other_person_id(migrated_engine):
+    p = SqlAlchemyProfileRepository(migrated_engine).create_person(
+        Person(display_name="other", timezone="America/Los_Angeles")
+    )
+    return p.profile_id
 
 
 @pytest.fixture
-def task_repo(conn_factory):
-    return SqliteTaskRepositoryAdapter(conn_factory)
+def task_repo(migrated_engine, person_id):
+    return PgTaskRepositoryAdapter(migrated_engine, person_id)
 
 
 @pytest.fixture
-def time_entry_repo(conn_factory):
-    return SqliteTimeEntryRepositoryAdapter(conn_factory)
+def time_entry_repo(migrated_engine):
+    return PgTimeEntryRepositoryAdapter(migrated_engine)
 
 
 @pytest.fixture
-def sprint_repo(conn_factory):
-    return SqliteSprintRepositoryAdapter(conn_factory)
+def sprint_repo(migrated_engine):
+    return PgSprintRepositoryAdapter(migrated_engine)
 
 
 @pytest.fixture
-def daily_log_repo(conn_factory):
-    return SqliteDailyLogRepositoryAdapter(conn_factory)
+def daily_log_repo(migrated_engine, person_id):
+    return PgDailyLogRepositoryAdapter(migrated_engine, person_id)
 
 
 @pytest.fixture
-def system_meta_repo(conn_factory):
-    return SqliteSystemMetaRepositoryAdapter(conn_factory)
+def system_meta_repo(migrated_engine):
+    return PgSystemMetaRepositoryAdapter(migrated_engine)
+
+
+@pytest.fixture
+def query_client(migrated_engine):
+    return PgTaskQueryClient(migrated_engine)

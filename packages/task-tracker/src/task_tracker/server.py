@@ -1,43 +1,40 @@
 from fastmcp import FastMCP
+from sqlalchemy import Engine
 
 from task_tracker.infrastructure.adapters import (
-    SqliteDailyLogRepositoryAdapter,
-    SqliteSprintRepositoryAdapter,
-    SqliteSystemMetaRepositoryAdapter,
-    SqliteTaskRepositoryAdapter,
-    SqliteTimeEntryRepositoryAdapter,
+    PgDailyLogRepositoryAdapter,
+    PgSprintRepositoryAdapter,
+    PgSystemMetaRepositoryAdapter,
+    PgTaskRepositoryAdapter,
+    PgTimeEntryRepositoryAdapter,
 )
-from task_tracker.infrastructure.database import (
-    ConnectionFactory,
-    get_connection,
-    init_db,
-)
+from task_tracker.infrastructure.engine import default_engine, default_owner_id
 from task_tracker.tools import register_all
 
 
-def create_app(conn_factory=None):
-    """Build the MCP app with all tools registered.
+def create_app(engine: Engine | None = None, owner_id: int | None = None):
+    """Build the MCP app with all tools registered against Postgres (ADR-0008).
 
     Args:
-        conn_factory: Callable returning a sqlite3.Connection. If None,
-            uses the default file-based DB with a ConnectionFactory.
+        engine: SQLAlchemy Engine for the shared Postgres. Defaults to one built
+            from DATABASE_URL.
+        owner_id: person the tools act for. Defaults to the env-resolved owner.
 
     Returns:
         Tuple of (mcp instance, dict of tool functions).
     """
-    if conn_factory is None:
-        conn = get_connection()
-        init_db(conn)
-        conn.close()
-        conn_factory = ConnectionFactory()
+    if engine is None:
+        engine = default_engine()
+    if owner_id is None:
+        owner_id = default_owner_id()
 
     app = FastMCP("Task Tracker")
     repos = {
-        "task": SqliteTaskRepositoryAdapter(conn_factory),
-        "time_entry": SqliteTimeEntryRepositoryAdapter(conn_factory),
-        "sprint": SqliteSprintRepositoryAdapter(conn_factory),
-        "daily_log": SqliteDailyLogRepositoryAdapter(conn_factory),
-        "system_meta": SqliteSystemMetaRepositoryAdapter(conn_factory),
+        "task": PgTaskRepositoryAdapter(engine, owner_id),
+        "time_entry": PgTimeEntryRepositoryAdapter(engine),
+        "sprint": PgSprintRepositoryAdapter(engine),
+        "daily_log": PgDailyLogRepositoryAdapter(engine, owner_id),
+        "system_meta": PgSystemMetaRepositoryAdapter(engine),
     }
     tools = register_all(app, repos)
     return app, tools

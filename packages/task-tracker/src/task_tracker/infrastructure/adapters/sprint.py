@@ -48,7 +48,5 @@ class SqliteSprintRepositoryAdapter(SprintRepositoryPort):
 
     def deactivate_all(self) -> None:
         conn = self._conn_factory()
-        conn.execute(
-            "UPDATE sprints SET status = 'completed' WHERE status = 'active'"
-        )
+        conn.execute("UPDATE sprints SET status = 'completed' WHERE status = 'active'")
         conn.commit()
