@@ -12,9 +12,13 @@ RITUAL_TOOLS = [
     "get_full_goal_list", "get_plan", "get_goal_detail", "get_active_chapter",
 ]
 INGESTION_TOOLS = [
-    "create_chapter", "create_goal", "create_goal_version", "update_goal",
-    "get_goal_detail", "get_active_chapter",
+    "create_chapter", "create_goal", "create_goal_version",
+    "create_goals", "create_goal_versions", "update_goal",
+    "get_full_goal_list", "get_goal_detail", "get_active_chapter",
 ]
+# Reads in the ingestion grant: NO get_plan — ingestion never touches daily
+# plans and get_plan has a get-or-create side-effect (mcp-tools §2/§3.4).
+INGESTION_READS = ["get_full_goal_list", "get_goal_detail", "get_active_chapter"]
 
 # Anthropic-format tool schemas for the ritual grant (used by MorningTurn).
 RITUAL_TOOL_DEFS: list[dict] = [
@@ -140,9 +144,10 @@ def build_server(engine: Engine) -> FastMCP:
 
 
 def build_ingestion_server(engine: Engine) -> FastMCP:
-    """Ingestion grant only: authoring + reads. NO ritual write tools (mcp-tools §2)."""
+    """Ingestion grant: authoring + reads, minus get_plan. NO ritual write tools
+    and NO daily-plan reads — ingestion never touches plans (mcp-tools §2/§3.4)."""
     mcp = FastMCP("goal-bot-ingestion")
     uc = build_use_cases(engine)
     authoring.register_authoring_tools(mcp, uc)
-    reads.register_read_tools(mcp, uc)
+    reads.register_read_tools(mcp, uc, include=INGESTION_READS)
     return mcp

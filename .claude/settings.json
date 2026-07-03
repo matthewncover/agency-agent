@@ -4,7 +4,12 @@
       "Bash(just test *)",
       "Bash(just lint *)",
       "Bash(xargs cat)",
-      "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -c ' *)"
+      "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -c ' *)",
+      "mcp__goal-bot-ingestion",
+      "Edit(/.claude/skills/ingest-goals/**)",
+      "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -P pager=off -c ' *)",
+      "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -P pager=off -x -c ' *)",
+      "Bash(docker exec *)"
     ]
   }
 }

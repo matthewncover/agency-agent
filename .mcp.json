@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "goal-bot-ingestion": {
+      "command": "uv",
+      "args": ["run", "goal-bot-ingest"]
+    }
+  }
+}

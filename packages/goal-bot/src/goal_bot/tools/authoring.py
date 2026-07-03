@@ -54,6 +54,34 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         )
 
     @mcp.tool
+    def create_goals(owner: int, goals: list[dict]) -> list[dict]:
+        """Batch-create new goals with their versions in ONE transaction. Prefer
+        this over many create_goal / create_goal_version calls.
+
+        Each goal: {title, chapter_id?, versions: [ {level, definition,
+        recurrence_type, recurrence_config, completion_type, why?,
+        target_quantity?, quantity_unit?, obstacles?, task_ref_source?,
+        task_ref_id?} ... ]}. Do NOT pass version_no (server-assigned).
+        Returns [{gid, title, versions:[{level, version_id, version_no}]}] — use
+        each gid for write-back. Handles explode-buckets and need+want pairs.
+        """
+        return uc.create_goals(owner, goals)
+
+    @mcp.tool
+    def create_goal_versions(versions: list[dict]) -> list[int]:
+        """Batch-add versions to EXISTING goals in ONE transaction (re-ingest bar
+        changes). Each version: {goal_id, level, definition, recurrence_type,
+        recurrence_config, completion_type, why?, target_quantity?,
+        quantity_unit?, obstacles?, task_ref_source?, task_ref_id?}. A bar change
+        is a new version on the same goal_id (server closes the prior). Do NOT
+        pass version_no. Returns the new version ids.
+        """
+        return uc.create_goal_versions(versions)
+
+    @mcp.tool
     def update_goal(goal_id: int, fields: dict) -> dict:
-        """Update goal identity fields (title, tags, chapter_id, archived_at only)."""
+        """Update goal identity fields (title, chapter_id, archived_at only).
+
+        Tags are not yet writable (no tag write path; deferred per template §4).
+        """
         return uc.update_goal(goal_id, fields)

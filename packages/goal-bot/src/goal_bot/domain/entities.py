@@ -63,7 +63,7 @@ class Goal(BaseModel):
 
 class GoalVersion(BaseModel):
     id: int | None = None
-    goal_id: int
+    goal_id: int | None = None  # assigned after the goal exists (batch create)
     version_no: int | None = None  # server-assigned per (goal_id, level) when None
     level: Level
     definition: str

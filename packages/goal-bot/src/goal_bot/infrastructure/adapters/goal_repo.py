@@ -49,6 +49,79 @@ def _goal_version(row) -> GoalVersion:
     )
 
 
+def _insert_goal_row(c, goal: Goal) -> Goal:
+    """Insert a goal + its seed goal_state on an open connection."""
+    row = c.execute(
+        insert(t.goal)
+        .values(
+            owner_profile_id=goal.owner_profile_id,
+            chapter_id=goal.chapter_id,
+            title=goal.title,
+        )
+        .returning(t.goal)
+    ).one()
+    c.execute(insert(t.goal_state).values(goal_id=row.id))
+    return _goal(row)
+
+
+def _insert_goal_version_row(c, version: GoalVersion) -> GoalVersion:
+    """Insert a goal_version (+ obstacles) on an open connection, assigning
+    version_no per (goal_id, level) and closing the prior current version."""
+    vals: dict = {
+        "goal_id": version.goal_id,
+        "level": version.level,
+        "definition": version.definition,
+        "why": version.why,
+        "recurrence_type": version.recurrence_type,
+        "recurrence_config": version.recurrence_config,
+        "completion_type": version.completion_type,
+        "target_quantity": version.target_quantity,
+        "quantity_unit": version.quantity_unit,
+        "task_ref_source": version.task_ref_source,
+        "task_ref_id": version.task_ref_id,
+        "lifecycle": version.lifecycle,
+    }
+    if version.effective_from is not None:
+        vals["effective_from"] = version.effective_from
+    if version.effective_to is not None:
+        vals["effective_to"] = version.effective_to
+    # version_no is server-assigned per (goal_id, level): a bar change is a new
+    # version in that level's own lineage (spec §5.2 / OQ-14).
+    if version.version_no is not None:
+        vals["version_no"] = version.version_no
+    else:
+        prev_max = c.execute(
+            select(func.max(t.goal_version.c.version_no))
+            .where(t.goal_version.c.goal_id == version.goal_id)
+            .where(t.goal_version.c.level == version.level)
+        ).scalar()
+        vals["version_no"] = (prev_max or 0) + 1
+    # Close the prior current version at this (goal, level) so a bar bump leaves
+    # exactly one effective row per level (§5.2). Old daily_plan_items stay
+    # pinned to the closed version (OQ-14).
+    c.execute(
+        update(t.goal_version)
+        .where(t.goal_version.c.goal_id == version.goal_id)
+        .where(t.goal_version.c.level == version.level)
+        .where(t.goal_version.c.effective_to.is_(None))
+        .values(effective_to=func.now())
+    )
+    row = c.execute(
+        insert(t.goal_version).values(**vals).returning(t.goal_version)
+    ).one()
+    if version.obstacles:
+        c.execute(
+            insert(t.anticipated_obstacle),
+            [
+                {"goal_version_id": row.id, "text": text}
+                for text in version.obstacles
+            ],
+        )
+    result = _goal_version(row)
+    result.obstacles = list(version.obstacles)
+    return result
+
+
 class SqlAlchemyGoalRepository(GoalRepositoryPort):
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -82,74 +155,35 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
 
     def create_goal(self, goal: Goal) -> Goal:
         with self._engine.begin() as c:
-            row = c.execute(
-                insert(t.goal)
-                .values(
-                    owner_profile_id=goal.owner_profile_id,
-                    chapter_id=goal.chapter_id,
-                    title=goal.title,
-                )
-                .returning(t.goal)
-            ).one()
-            c.execute(insert(t.goal_state).values(goal_id=row.id))
-        return _goal(row)
+            return _insert_goal_row(c, goal)
 
     def create_goal_version(self, version: GoalVersion) -> GoalVersion:
-        vals: dict = {
-            "goal_id": version.goal_id,
-            "level": version.level,
-            "definition": version.definition,
-            "why": version.why,
-            "recurrence_type": version.recurrence_type,
-            "recurrence_config": version.recurrence_config,
-            "completion_type": version.completion_type,
-            "target_quantity": version.target_quantity,
-            "quantity_unit": version.quantity_unit,
-            "task_ref_source": version.task_ref_source,
-            "task_ref_id": version.task_ref_id,
-            "lifecycle": version.lifecycle,
-        }
-        if version.effective_from is not None:
-            vals["effective_from"] = version.effective_from
-        if version.effective_to is not None:
-            vals["effective_to"] = version.effective_to
         with self._engine.begin() as c:
-            # version_no is server-assigned per (goal_id, level): a bar change is
-            # a new version in that level's own lineage (spec §5.2 / OQ-14).
-            if version.version_no is not None:
-                vals["version_no"] = version.version_no
-            else:
-                prev_max = c.execute(
-                    select(func.max(t.goal_version.c.version_no))
-                    .where(t.goal_version.c.goal_id == version.goal_id)
-                    .where(t.goal_version.c.level == version.level)
-                ).scalar()
-                vals["version_no"] = (prev_max or 0) + 1
-            # Close the prior current version at this (goal, level) so a bar
-            # bump leaves exactly one effective row per level (§5.2). Old
-            # daily_plan_items stay pinned to the closed version (OQ-14).
-            c.execute(
-                update(t.goal_version)
-                .where(t.goal_version.c.goal_id == version.goal_id)
-                .where(t.goal_version.c.level == version.level)
-                .where(t.goal_version.c.effective_to.is_(None))
-                .values(effective_to=func.now())
-            )
-            row = c.execute(
-                insert(t.goal_version).values(**vals)
-                .returning(t.goal_version)
-            ).one()
-            if version.obstacles:
-                c.execute(
-                    insert(t.anticipated_obstacle),
-                    [
-                        {"goal_version_id": row.id, "text": text}
-                        for text in version.obstacles
-                    ],
-                )
-        result = _goal_version(row)
-        result.obstacles = list(version.obstacles)
-        return result
+            return _insert_goal_version_row(c, version)
+
+    def create_goals_with_versions(
+        self, goals: list[tuple[Goal, list[GoalVersion]]]
+    ) -> list[tuple[Goal, list[GoalVersion]]]:
+        """Create N new goals, each with its versions + obstacles, atomically."""
+        out: list[tuple[Goal, list[GoalVersion]]] = []
+        with self._engine.begin() as c:
+            for goal, versions in goals:
+                saved_goal = _insert_goal_row(c, goal)
+                saved_versions = [
+                    _insert_goal_version_row(
+                        c, v.model_copy(update={"goal_id": saved_goal.id})
+                    )
+                    for v in versions
+                ]
+                out.append((saved_goal, saved_versions))
+        return out
+
+    def create_goal_versions(
+        self, versions: list[GoalVersion]
+    ) -> list[GoalVersion]:
+        """Add N versions to existing goals atomically (re-ingest bar changes)."""
+        with self._engine.begin() as c:
+            return [_insert_goal_version_row(c, v) for v in versions]
 
     def get_goal_detail(
         self, goal_id: int

@@ -13,8 +13,16 @@ lint:
 fmt:
     uv run ruff format .
 
+# Seed the toy dataset (real first chapter + coverage goals) under a fresh person.
 seed:
     uv run python -m goal_bot.seed
+
+# Wipe-and-retry loop: rebuild both schemas clean, then seed the toy dataset (person_id=1).
+toy-reset: reset-db seed
+
+# Create just your person profile (the ingestion owner id) — no demo goals.
+seed-me:
+    uv run python -m goal_bot.seed --person-only
 
 # Wipe seeded/toy goal data (chapters, goals, versions, plans, items, wins…) but KEEP your person/profile.
 wipe-goals:

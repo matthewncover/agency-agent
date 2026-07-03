@@ -28,6 +28,16 @@ class GoalRepositoryPort(ABC):
     def create_goal_version(self, version: GoalVersion) -> GoalVersion: ...
 
     @abstractmethod
+    def create_goals_with_versions(
+        self, goals: list[tuple[Goal, list[GoalVersion]]]
+    ) -> list[tuple[Goal, list[GoalVersion]]]: ...
+
+    @abstractmethod
+    def create_goal_versions(
+        self, versions: list[GoalVersion]
+    ) -> list[GoalVersion]: ...
+
+    @abstractmethod
     def get_goal_detail(
         self, goal_id: int
     ) -> tuple[Goal, list[GoalVersion]] | None: ...

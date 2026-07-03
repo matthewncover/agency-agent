@@ -14,7 +14,10 @@ from goal_bot.domain.entities import (
     WinLogEntry,
 )
 
-_GOAL_IDENTITY_FIELDS = {"title", "tags", "chapter_id", "archived_at"}
+# Tags are intentionally absent: there is no tag column on `goal` and no
+# tag/goal_tag write path yet (deferred per goal-markdown.md §4). Listing it
+# here would let a write pass validation and then crash in the repo.
+_GOAL_IDENTITY_FIELDS = {"title", "chapter_id", "archived_at"}
 
 
 @dataclass
@@ -40,10 +43,44 @@ class GoalUseCases:
     def create_goal_version(self, **kw) -> int:
         return self.goals.create_goal_version(GoalVersion(**kw)).id
 
+    def create_goals(self, owner: int, goals: list[dict]) -> list[dict]:
+        """Batch-create new goals, each with its versions + obstacles, atomically.
+        Each goal: {title, chapter_id?, versions: [version-kwargs ...]}."""
+        specs: list[tuple[Goal, list[GoalVersion]]] = []
+        for g in goals:
+            goal = Goal(
+                owner_profile_id=owner,
+                title=g["title"],
+                chapter_id=g.get("chapter_id"),
+            )
+            versions = [GoalVersion(goal_id=None, **v) for v in g["versions"]]
+            specs.append((goal, versions))
+        saved = self.goals.create_goals_with_versions(specs)
+        return [
+            {
+                "gid": goal.id,
+                "title": goal.title,
+                "versions": [
+                    {"level": v.level, "version_id": v.id, "version_no": v.version_no}
+                    for v in versions
+                ],
+            }
+            for goal, versions in saved
+        ]
+
+    def create_goal_versions(self, versions: list[dict]) -> list[int]:
+        """Batch-add versions to existing goals atomically. Each dict carries a
+        goal_id (re-ingest bar changes)."""
+        objs = [GoalVersion(**v) for v in versions]
+        return [v.id for v in self.goals.create_goal_versions(objs)]
+
     def update_goal(self, goal_id: int, fields: dict) -> dict:
         bad = set(fields) - _GOAL_IDENTITY_FIELDS
         if bad:
-            raise ValueError(f"update_goal cannot set content fields: {sorted(bad)}")
+            raise ValueError(
+                "update_goal accepts only title/chapter_id/archived_at; "
+                f"rejected: {sorted(bad)}"
+            )
         g = self.goals.update_goal(goal_id, fields)
         return g.model_dump()
 

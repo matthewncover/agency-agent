@@ -1,7 +1,8 @@
 # Goal-Markdown — Authoring Template & Ingestion Contract
  
-> **Doc:** `doc/templates/goal-markdown.md` · **v0.4** · status: Phase-2 (chat T) output
+> **Doc:** `doc/templates/goal-markdown.md` · **v0.5** · status: Phase-2 (chat T) output
 > **Role:** Defines (a) the markdown you write goals in (Obsidian), and (b) the contract the *separate* ingestion chat follows to turn that markdown into structured DB records per spec §6. Ingestion runs in its own Claude chat, **not** the Telegram bot. This doc does not build the runtime.
+> **v0.4 → v0.5:** unlabeled one-offs default to **`level=need`** (§2.0, §3.3, §4) — a bare one-off is a committed floor, not a stretch; an explicit `need:`/`want:` label still wins.
 > **v0.3 → v0.4:** pushups resolved (`quantity` ⇒ split into two goals). `accumulation` added to the recurrence enum (4h painting). **Goals are chapter-scoped** — rollover creates fresh goals in the new chapter (§5.6); cross-chapter lineage deferred. Tag starter-set + lightweight stance recorded. Group-profile model for shared goals noted as an architecture decision (dissolves OQ-16).
 > **v0.2 → v0.3:** reverted to spec §6's **two-version** model (need + want are separate `goal_version` rows) — keeps level on the pinned version; `why`/`obstacles` written to all active versions on ingest.
 > **v0.1 → v0.2:** `if_then`/coping parsing dropped (obstacles stored verbatim); `min:`/`stretch:` aliases dropped (need/want only); disappeared goals auto-archive (reversible); conventions hoisted to top; recurrence quick-reference + rotation example added.
@@ -24,8 +25,8 @@
 ### 2.0 Conventions (read once)
  
 - **Ownership** comes from the section heading: `### Jade` / `### Matthew` → individual, tagged to that person. `### Couple` → `owner_scope=shared`.
-- **Level** comes from the bar label: `need:` and/or `want:`. Both present = one goal with two bars. Drop the old `##### Needs` / `##### Wants` section headers — they can't express a both-bars goal; if present they're treated as cosmetic.
-- **A heading with discrete sub-items and no `need:`/`want:` line** is read as **N separate one-off goals** sharing the one `why` and a common tag (see §3.3). Ingestion confirms the split.
+- **Level** comes from the bar label: `need:` and/or `want:`. Both present = one goal with two bars. Drop the old `##### Needs` / `##### Wants` section headers — they can't express a both-bars goal; if present they're treated as cosmetic. **An item with no label at all defaults to `need`** — a bare commitment is a floor, not a stretch. An explicit label always wins (a stretch one-off is possible by writing `want:` on it).
+- **A heading with discrete sub-items and no `need:`/`want:` line** is read as **N separate one-off goals** sharing the one `why` and a common tag (see §3.3). Ingestion confirms the split; each exploded one-off defaults to `level=need` (above).
 - **Cadence is parsed from natural phrasing.** Override only when you know it'll guess wrong:
   - `cadence: quota 3x/week` · `cadence: fixed Mon/Wed/Fri` · `cadence: interval 4d` · `cadence: rotation [upper, lower, rest]`
   - **`fixed_schedule` must name the days** (weekdays, or month dates) — that's what distinguishes it from `quota`.
@@ -116,7 +117,7 @@ One block = one goal = one ID, whatever the bar count. `need:` only → need-onl
   - Cancel Slovenia plans
 ```
  
-→ **N one-off goals** (`recurrence=oneoff`, `completion=binary`), each inheriting the `why`, all tagged together. Ingestion confirms the explode, then writes a `gid` back onto each sub-item.
+→ **N one-off goals** (`recurrence=oneoff`, `completion=binary`, `level=need` — bucket items carry no bar, and a bare commitment is a floor, not a stretch), each inheriting the `why`, all tagged together. Ingestion confirms the explode, then writes a `gid` back onto each sub-item. (`level` is shown inline in the change summary as an inferred field, not re-confirmed per item; reassessment can later offer move-to-want or drop per spec §3.)
  
 ### 3.4 Want-only — symmetric
  
@@ -166,7 +167,7 @@ One block = one goal = one ID, whatever the bar count. `need:` only → need-onl
 | `goal.owner_scope` / `person_id` | section heading | **I** | Positional. |
 | `goal.chapter_id` | file date header | **I → C** | Goals are **chapter-scoped** (§5.6). Confirm on per-person-vs-shared scoping. |
 | `goal.archived_at` | absence on re-ingest | **I** | Auto-archive on removal, reversible, surfaced (§5.4). |
-| `goal_version.level` | `need:` / `want:` lines | **I** | Each label → one version at that level (two versions if both). |
+| `goal_version.level` | `need:` / `want:` lines | **I** | Each label → one version at that level (two versions if both). **No label → defaults to `need`** (bare one-offs / explode-bucket items): a commitment is a floor, not a stretch. Explicit label wins. |
 | `goal_version.definition` (per bar) | text after the label | **T** | The bar itself. |
 | `goal_version.why` | `why:` line | **T (required)** | Authored once; written to all active versions. Ingestion rejects a goal with no why. |
 | `goal_version.recurrence_type` | cadence phrasing | **I → C** | Confirm quota-vs-fixed and anything unclear. |
