@@ -1,0 +1,95 @@
+# C1 — CI pipeline (doc/build/C1-ci-pipeline.md).
+# Verification only: no secrets, no prod access, no deploys.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Rapid iteration shouldn't queue stale runs (C1 decision).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      # --all-packages: the root project has no dependencies; without it the
+      # workspace members (goal-bot, profile, task-tracker) aren't installed.
+      - run: uv sync --locked --all-packages
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agency
+          POSTGRES_PASSWORD: agency
+          POSTGRES_DB: agency
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agency -d agency"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://agency:agency@localhost:5432/agency
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      # --all-packages: the root project has no dependencies; without it the
+      # workspace members (goal-bot, profile, task-tracker) aren't installed.
+      - run: uv sync --locked --all-packages
+      # conftest.py provisions agency_test and runs `alembic upgrade head`
+      # itself, so this is also a fresh-database migration smoke test.
+      - run: uv run pytest
+
+  migration-roundtrip:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agency
+          POSTGRES_PASSWORD: agency
+          POSTGRES_DB: agency
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agency -d agency"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://agency:agency@localhost:5432/agency
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      # --all-packages: the root project has no dependencies; without it the
+      # workspace members (goal-bot, profile, task-tracker) aren't installed.
+      - run: uv sync --locked --all-packages
+      # Catch irreversible or mis-ordered revisions before they reach the
+      # human-gated prod step (`just deploy-migrate`).
+      - run: uv run alembic upgrade head
+      - run: uv run alembic downgrade base
+      - run: uv run alembic upgrade head
