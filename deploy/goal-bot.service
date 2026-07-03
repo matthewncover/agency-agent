@@ -1,0 +1,58 @@
+# goal-bot.service — systemd unit for the goal-bot Telegram bot (B8).
+#
+# Install:
+#   sudo cp deploy/goal-bot.service /etc/systemd/system/goal-bot.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now goal-bot.service
+# Logs:
+#   journalctl -u goal-bot -f
+#
+# Assumes:
+#   - repo cloned at /opt/agency-agent, owned by user `goalbot`
+#   - uv installed at /usr/local/bin/uv (adjust ExecStart if elsewhere:
+#     `command -v uv` on the box)
+#   - secrets in /etc/agency-agent/agency.env (0640, owned by goalbot) —
+#     NOT in the repo. See .env.prod.example.
+#   - Telegram runs in polling mode (MVP): no inbound port, no webhook/TLS.
+
+[Unit]
+Description=goal-bot (agency-agent) Telegram goal companion
+Documentation=file:///opt/agency-agent/doc/build/B8-vps-deploy.md
+# Wait for network; if Postgres runs locally under systemd, also gate on it.
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=goalbot
+Group=goalbot
+WorkingDirectory=/opt/agency-agent
+
+# Secrets/config live outside the repo. `-` = don't fail if absent at first boot.
+EnvironmentFile=-/etc/agency-agent/agency.env
+
+# uv resolves the workspace venv and runs the polling loop.
+ExecStart=/usr/local/bin/uv run python -m goal_bot
+
+# Restart on crash, but back off so a hard-failing config doesn't hot-loop.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logs to the journal (stderr). Observability stays light per B8 (D-13 ratchet).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=goal-bot
+
+# --- Light hardening (personal tool; not exhaustive) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# uv needs a writable cache; grant just that.
+Environment=UV_CACHE_DIR=/var/cache/goal-bot-uv
+CacheDirectory=goal-bot-uv
+
+[Install]
+WantedBy=multi-user.target

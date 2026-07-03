@@ -24,6 +24,14 @@ toy-reset: reset-db seed
 seed-me:
     uv run python -m goal_bot.seed --person-only
 
+# B7: provision an identity (human-owned). e.g. `just add-person --name Ada --timezone America/New_York`
+add-person *ARGS:
+    uv run python -m goal_bot.provision add-person {{ARGS}}
+
+# B7: provision a household group. e.g. `just add-group --label "Ada & Bo" --members 1,2`
+add-group *ARGS:
+    uv run python -m goal_bot.provision add-group {{ARGS}}
+
 # Wipe seeded/toy goal data (chapters, goals, versions, plans, items, wins…) but KEEP your person/profile.
 wipe-goals:
     docker compose exec -T postgres psql -U agency -d agency -c "TRUNCATE goalbot.chapter, goalbot.goal, goalbot.goal_version, goalbot.goal_state, goalbot.daily_plan, goalbot.daily_plan_item, goalbot.win_log, goalbot.friction_log, goalbot.insight, goalbot.tag, goalbot.goal_tag, goalbot.anticipated_obstacle RESTART IDENTITY CASCADE;"
@@ -37,3 +45,15 @@ run:
 
 db-url:
     @echo $DATABASE_URL
+
+# B8: preview the pending migration plan against $DATABASE_URL, then apply it
+# only after an explicit typed confirm. Human-run, never auto-run (CLAUDE.md).
+# Point $DATABASE_URL at prod in the deploy shell, review, then confirm.
+deploy-migrate:
+    @echo "== target DB ==" && echo "${DATABASE_URL%%\\?*}"
+    @echo "\n== current revision ==" && uv run alembic current
+    @echo "\n== history ==" && uv run alembic history --verbose
+    @echo "\n== offline SQL preview (current -> head) ==" && uv run alembic upgrade --sql head
+    @printf "\nApply 'alembic upgrade head' to the DB above? Type 'upgrade' to proceed: " && \
+      read ans && [ "$ans" = "upgrade" ] && uv run alembic upgrade head || \
+      echo "aborted — no migration applied"
