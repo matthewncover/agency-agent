@@ -3,9 +3,27 @@ from datetime import date, datetime
 from sqlalchemy import Engine, func, insert, or_, select, update
 
 from goal_bot.application.ports import GoalRepositoryPort
-from goal_bot.domain.entities import Chapter, Goal, GoalState, GoalVersion, Insight
-from goal_bot.domain.recurrence import rotation_next_index
+from goal_bot.domain.entities import (
+    Chapter,
+    Goal,
+    GoalState,
+    GoalVersion,
+    Insight,
+    RotationGroup,
+)
 from goal_bot.infrastructure import tables as t
+
+
+def _rotation_group(row) -> RotationGroup:
+    return RotationGroup(
+        id=row.id,
+        owner_profile_id=row.owner_profile_id,
+        name=row.name,
+        sequence=row.sequence,
+        rotation_index=row.rotation_index,
+        last_completed_at=row.last_completed_at,
+        archived_at=row.archived_at,
+    )
 
 
 def _chapter(row) -> Chapter:
@@ -318,15 +336,14 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             carry_over_count=row.carry_over_count,
         )
 
-    def advance_rotation(self, goal_id: int, sequence_len: int) -> int:
-        new_index = rotation_next_index(
-            self.get_goal_state(goal_id).rotation_index, sequence_len
-        )
+    def advance_rotation(self, goal_id: int, new_index: int, when: datetime) -> int:
+        # new_index is computed by the caller from the SURFACED slot (domain
+        # walk, ADR-0016) — never derived here from the raw stored pointer.
         with self._engine.begin() as c:
             c.execute(
                 update(t.goal_state)
                 .where(t.goal_state.c.goal_id == goal_id)
-                .values(rotation_index=new_index, last_completed_at=func.now())
+                .values(rotation_index=new_index, last_completed_at=when)
             )
         return new_index
 
@@ -364,6 +381,79 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 update(t.goal_state)
                 .where(t.goal_state.c.goal_id == goal_id)
                 .values(rotation_index=position)
+            )
+
+    # --- rotation groups (ADR-0016) ---
+
+    def create_rotation_group(self, group: RotationGroup) -> RotationGroup:
+        with self._engine.begin() as c:
+            row = c.execute(
+                insert(t.rotation_group)
+                .values(
+                    owner_profile_id=group.owner_profile_id,
+                    name=group.name,
+                    sequence=group.sequence,
+                    rotation_index=group.rotation_index,
+                )
+                .returning(t.rotation_group)
+            ).one()
+        return _rotation_group(row)
+
+    def get_rotation_group(self, group_id: int) -> RotationGroup | None:
+        with self._engine.connect() as c:
+            row = c.execute(
+                select(t.rotation_group).where(t.rotation_group.c.id == group_id)
+            ).one_or_none()
+        return _rotation_group(row) if row else None
+
+    def list_rotation_groups(self, owner_profile_id: int) -> list[RotationGroup]:
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(t.rotation_group)
+                .where(t.rotation_group.c.owner_profile_id == owner_profile_id)
+                .where(t.rotation_group.c.archived_at.is_(None))
+                .order_by(t.rotation_group.c.id)
+            ).all()
+        return [_rotation_group(r) for r in rows]
+
+    def get_rotation_group_for_goal(self, goal_id: int) -> RotationGroup | None:
+        # jsonb containment ({"goal_id": N} ∈ sequence) — served by the gin
+        # index; at most one active group per goal (app-enforced at create).
+        with self._engine.connect() as c:
+            row = c.execute(
+                select(t.rotation_group)
+                .where(t.rotation_group.c.sequence.contains([{"goal_id": goal_id}]))
+                .where(t.rotation_group.c.archived_at.is_(None))
+                .order_by(t.rotation_group.c.id)
+                .limit(1)
+            ).one_or_none()
+        return _rotation_group(row) if row else None
+
+    def advance_rotation_group(
+        self, group_id: int, new_index: int, when: datetime
+    ) -> int:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.rotation_group)
+                .where(t.rotation_group.c.id == group_id)
+                .values(rotation_index=new_index, last_completed_at=when)
+            )
+        return new_index
+
+    def set_rotation_group_pointer(self, group_id: int, position: int) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.rotation_group)
+                .where(t.rotation_group.c.id == group_id)
+                .values(rotation_index=position)
+            )
+
+    def set_rotation_group_archived(self, group_id: int, when: datetime | None) -> None:
+        with self._engine.begin() as c:
+            c.execute(
+                update(t.rotation_group)
+                .where(t.rotation_group.c.id == group_id)
+                .values(archived_at=when)
             )
 
     def list_active_insights(self, person_id: int) -> list[Insight]:

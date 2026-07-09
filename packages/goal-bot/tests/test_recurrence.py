@@ -15,6 +15,12 @@ from goal_bot.domain.recurrence import (
     quota_window_bounds,
     rotation_current_index,
     rotation_current_label,
+    rotation_days_elapsed,
+    rotation_due_index,
+    rotation_group_due_goal_id,
+    rotation_group_due_index,
+    rotation_group_index_of_goal,
+    rotation_group_member_ids,
     rotation_next_index,
 )
 
@@ -44,6 +50,78 @@ class TestRotation:
     def test_empty_sequence(self):
         assert rotation_current_index([], 0) is None
         assert rotation_next_index(0, 0) == 0
+
+
+class TestRotationDueIndex:
+    """The date-aware walk (ADR-0016): each consecutive rest slot consumes one
+    elapsed calendar day; a rest day surfaces nothing."""
+
+    SEQ = ["push", "rest", "pull", "rest"]
+    REST = ["rest"]
+
+    def test_never_completed_is_due_now(self):
+        assert rotation_due_index(self.SEQ, 0, self.REST, None) == 0
+        # never-completed with the pointer on rest → next session, rests free
+        assert rotation_due_index(self.SEQ, 1, self.REST, None) == 2
+
+    def test_rest_consumes_a_day(self):
+        # push done yesterday, pointer on rest: today IS the rest day (bug 1
+        # regression — the old walk skipped rest instantly and offered pull)
+        assert rotation_due_index(self.SEQ, 1, self.REST, 1) is None
+
+    def test_session_after_rest_is_due(self):
+        assert rotation_due_index(self.SEQ, 1, self.REST, 2) == 2
+
+    def test_miss_holds_the_session(self):
+        # pull not done → it stays due as days pass; nothing skips ahead
+        assert rotation_due_index(self.SEQ, 1, self.REST, 5) == 2
+
+    def test_same_day_as_completion_not_due(self):
+        # pointer on a session, zero days elapsed → tomorrow, not twice today
+        assert rotation_due_index(self.SEQ, 0, self.REST, 0) is None
+
+    def test_no_rest_alternates_daily(self):
+        assert rotation_due_index(["a", "b"], 1, None, 1) == 1
+
+    def test_all_rest_and_empty(self):
+        assert rotation_due_index(["rest"], 0, self.REST, 3) is None
+        assert rotation_due_index([], 0, None, 3) is None
+
+    def test_days_elapsed(self):
+        assert rotation_days_elapsed(None, date(2026, 7, 3)) is None
+        assert rotation_days_elapsed(datetime(2026, 7, 3, 18, 0), date(2026, 7, 5)) == 2
+
+
+class TestRotationGroupWalk:
+    """Same walk over member-goal entries (ADR-0016): exactly one member can be
+    due per day, so same-day collisions are structurally impossible."""
+
+    SEQ = [{"goal_id": 11}, {"rest": True}, {"goal_id": 22}, {"rest": True}]
+
+    def test_member_ids(self):
+        assert rotation_group_member_ids(self.SEQ) == [11, 22]
+
+    def test_never_completed_first_member_due(self):
+        assert rotation_group_due_goal_id(self.SEQ, 0, None) == 11
+
+    def test_push_done_yesterday_today_is_rest(self):
+        assert rotation_group_due_index(self.SEQ, 1, 1) is None
+
+    def test_pull_due_after_the_rest_day(self):
+        assert rotation_group_due_goal_id(self.SEQ, 1, 2) == 22
+
+    def test_miss_shifts_everything_downstream(self):
+        # pull missed for days → still pull; the next push waits behind it
+        assert rotation_group_due_goal_id(self.SEQ, 1, 6) == 22
+
+    def test_inactive_member_skipped_for_free(self):
+        # goal 11 archived: its slot costs nothing, walk continues to 22
+        assert rotation_group_due_goal_id(self.SEQ, 0, 2, active_goal_ids={22}) == 22
+
+    def test_index_of_goal_from_pointer(self):
+        assert rotation_group_index_of_goal(self.SEQ, 1, 22) == 2
+        assert rotation_group_index_of_goal(self.SEQ, 1, 11) == 0  # wraps
+        assert rotation_group_index_of_goal(self.SEQ, 1, 99) is None
 
 
 class TestInterval:

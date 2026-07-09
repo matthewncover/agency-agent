@@ -99,6 +99,22 @@ class DailyPlanItem(BaseModel):
     what_shifted: str | None = None
 
 
+class RotationGroup(BaseModel):
+    """A cross-goal cadence scheduler (ADR-0016) — NOT a goal. It has no
+    versions, no need/want, no wins, and is never itself completable. `sequence`
+    entries are `{"goal_id": N}` (member) or `{"rest": true}` (spacer that
+    consumes one calendar day). A goal referenced by an active group is excluded
+    from independent recurrence classification; the group is its sole scheduler."""
+
+    id: int | None = None
+    owner_profile_id: int
+    name: str
+    sequence: list[dict]
+    rotation_index: int = 0
+    last_completed_at: datetime | None = None
+    archived_at: datetime | None = None
+
+
 class GoalState(BaseModel):
     """Mutable per-goal runtime state (goalbot.goal_state). The pointer fields
     drive interval/rotation surfacing; carry_over_count drives reassessment."""

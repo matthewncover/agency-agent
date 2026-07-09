@@ -273,7 +273,22 @@ def seed_demo(
         None,
     )
 
-    uc.create_goals(pid, _real_chapter_goals(ch) + _coverage_goals(ch))
+    created = uc.create_goals(pid, _real_chapter_goals(ch) + _coverage_goals(ch))
+
+    # Rotation group (ADR-0016): pushups and pull-ups share one alternating
+    # rhythm (push → rest → pull → rest); the group owns the cadence, the two
+    # goals keep their own need/want bars and rep logging.
+    by_title = {g["title"]: g["gid"] for g in created}
+    uc.create_rotation_group(
+        pid,
+        "calisthenics",
+        [
+            {"goal_id": by_title["pushups"]},
+            {"rest": True},
+            {"goal_id": by_title["pull-ups"]},
+            {"rest": True},
+        ],
+    )
 
     return pid
 

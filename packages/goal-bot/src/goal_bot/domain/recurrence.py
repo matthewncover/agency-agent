@@ -15,8 +15,14 @@ module is the single reader of that shape, so the conventions live here:
   days (measured from last completion; clock resets on `done`).
 - **rotation** — `{"sequence": [label, ...], "rest_labels": [label, ...]?}`.
   A completion-advanced pointer (`goal_state.rotation_index`) into `sequence`.
-  Rest/spacer labels are skipped when surfacing (you don't "do" rest) and the
-  pointer only advances on `done` (spec §5 rotation redesign).
+  The pointer only advances on `done` (spec §5 rotation redesign), and each
+  consecutive rest/spacer label consumes ONE elapsed calendar day since the
+  last completion (ADR-0016) — a rest day surfaces nothing.
+
+Rotation *groups* (ADR-0016) are not a recurrence type: they live in
+`goalbot.rotation_group` and schedule cadence ACROSS member goals with the same
+date-aware walk. A goal referenced by an active group is excluded from the
+per-goal classification below; see the rotation-group section of this module.
 - **quota** — `{"per_window": N, "window": "week", "week_start": "monday"?}`.
   N sessions per rolling window; budgeted against days left in the window.
 - **fixed_schedule** — `{"weekdays": [0..6]}` (Mon=0) **or** `{"month_days": [1..31]}`.
@@ -57,7 +63,67 @@ class QuotaStatus(Enum):
     SLACK = auto()  # still has room → offered as a candidate, not forced
 
 
-# --- rotation --------------------------------------------------------------
+# --- rotation (spec §5 + ADR-0016: the date-aware pointer walk) -------------
+#
+# Two bugs the pre-ADR-0016 walk had, both fixed here:
+#   1. Rest slots consumed zero calendar days (skipped instantly at surfacing),
+#      so push done Friday offered pull on Saturday.
+#   2. The pointer advanced from the STORED index, not the SURFACED one, so a
+#      session reached by skipping rest surfaced twice in a row.
+# The walk now takes days-elapsed-since-completion: each consecutive rest slot
+# consumes one elapsed day, and callers advance from the surfaced index.
+
+
+def rotation_days_elapsed(
+    last_completed_at: datetime | None, today: date
+) -> int | None:
+    """Whole days since the pointer's last completion; None = never completed
+    (the next session is due immediately, rest slots cost nothing)."""
+    if last_completed_at is None:
+        return None
+    return (today - last_completed_at.date()).days
+
+
+def _walk_due_index(
+    n: int,
+    stored_index: int | None,
+    days_elapsed: int | None,
+    is_rest,
+    is_skipped=lambda idx: False,
+) -> int | None:
+    """The shared date-aware walk: from the stored pointer, skipped entries
+    (e.g. inactive member goals) cost nothing, each consecutive rest slot
+    consumes one elapsed calendar day, and the first real session is due iff
+    enough days have passed (rests-crossed + 1). Returns the due index, or None
+    while today is still inside the rest gap (or nothing is live)."""
+    if n <= 0:
+        return None
+    start = (stored_index or 0) % n
+    rests = 0
+    for step in range(n):
+        idx = (start + step) % n
+        if is_skipped(idx):
+            continue
+        if is_rest(idx):
+            rests += 1
+            continue
+        if days_elapsed is None:
+            return idx  # never completed → due now
+        return idx if days_elapsed >= rests + 1 else None
+    return None  # every entry is rest/skipped — nothing to do
+
+
+def rotation_due_index(
+    sequence: list[str],
+    stored_index: int | None,
+    rest_labels: list[str] | None = None,
+    days_elapsed: int | None = None,
+) -> int | None:
+    """The label-rotation session due today, or None on a rest day."""
+    rest = set(rest_labels or [])
+    return _walk_due_index(
+        len(sequence), stored_index, days_elapsed, lambda i: sequence[i] in rest
+    )
 
 
 def rotation_current_index(
@@ -65,9 +131,9 @@ def rotation_current_index(
     stored_index: int | None,
     rest_labels: list[str] | None = None,
 ) -> int | None:
-    """The index of the session to surface now: start at the stored pointer and
-    skip forward over rest/spacer labels (rest auto-clears with a passing day).
-    Returns None if the sequence is empty or all-rest."""
+    """The next real session at/after the pointer, ignoring the calendar — the
+    fallback for resolving which slot a `done` belongs to when the log lands on
+    a rest day (did it early). Surfacing uses rotation_due_index instead."""
     if not sequence:
         return None
     rest = set(rest_labels or [])
@@ -89,11 +155,77 @@ def rotation_current_label(
     return sequence[idx] if idx is not None else None
 
 
-def rotation_next_index(stored_index: int | None, sequence_len: int) -> int:
-    """Pointer advance on `done`: step one past the current slot (wrapping)."""
+def rotation_next_index(surfaced_index: int | None, sequence_len: int) -> int:
+    """Pointer advance on `done`: one past the slot that was actually surfaced
+    and completed — NEVER the raw stored pointer, which may sit on a rest slot
+    behind the surfaced session (ADR-0016 bug 2)."""
     if sequence_len <= 0:
         return 0
-    return ((stored_index or 0) + 1) % sequence_len
+    return ((surfaced_index or 0) + 1) % sequence_len
+
+
+# --- rotation group (ADR-0016: cadence scheduled across member goals) --------
+# `sequence` entries are {"goal_id": N} (member) or {"rest": true} (spacer).
+
+
+def rotation_group_member_ids(sequence: list[dict]) -> list[int]:
+    """Member goal ids in sequence order (rest slots excluded)."""
+    return [e["goal_id"] for e in sequence if "goal_id" in e]
+
+
+def rotation_group_due_index(
+    sequence: list[dict],
+    stored_index: int | None,
+    days_elapsed: int | None,
+    active_goal_ids: set[int] | None = None,
+) -> int | None:
+    """The sequence index of the member due today, or None on a rest day.
+    Entries whose goal is not in `active_goal_ids` (archived/paused members)
+    are skipped transparently and consume no days."""
+
+    def is_rest(idx: int) -> bool:
+        return "goal_id" not in sequence[idx]
+
+    def is_skipped(idx: int) -> bool:
+        gid = sequence[idx].get("goal_id")
+        return (
+            gid is not None
+            and active_goal_ids is not None
+            and gid not in active_goal_ids
+        )
+
+    return _walk_due_index(
+        len(sequence), stored_index, days_elapsed, is_rest, is_skipped
+    )
+
+
+def rotation_group_due_goal_id(
+    sequence: list[dict],
+    stored_index: int | None,
+    days_elapsed: int | None,
+    active_goal_ids: set[int] | None = None,
+) -> int | None:
+    idx = rotation_group_due_index(
+        sequence, stored_index, days_elapsed, active_goal_ids
+    )
+    return sequence[idx]["goal_id"] if idx is not None else None
+
+
+def rotation_group_index_of_goal(
+    sequence: list[dict], stored_index: int | None, goal_id: int
+) -> int | None:
+    """The first entry at/after the pointer referencing `goal_id` — resolves
+    which slot a `done` belongs to when it lands off-schedule (did it early on
+    a rest day). Completion advances from this index."""
+    n = len(sequence)
+    if n <= 0:
+        return None
+    start = (stored_index or 0) % n
+    for step in range(n):
+        idx = (start + step) % n
+        if sequence[idx].get("goal_id") == goal_id:
+            return idx
+    return None
 
 
 # --- interval --------------------------------------------------------------

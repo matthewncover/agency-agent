@@ -22,6 +22,7 @@ RITUAL_TOOLS = [
     # re-anchoring; the other two are ritual-only lifecycle verbs.
     "set_goal_lifecycle",
     "set_rotation_pointer",
+    "set_rotation_group_pointer",
     "create_goal_version",
     "get_full_goal_list",
     "get_plan",
@@ -36,6 +37,10 @@ INGESTION_TOOLS = [
     "create_goals",
     "create_goal_versions",
     "update_goal",
+    # Rotation groups (ADR-0016) — authored structure, reconciled at re-ingest.
+    "create_rotation_group",
+    "archive_rotation_group",
+    "list_rotation_groups",
     "get_full_goal_list",
     "get_goal_detail",
     "get_active_chapter",
@@ -166,6 +171,22 @@ RITUAL_TOOL_DEFS: list[dict] = [
                 "position": {"type": "integer"},
             },
             "required": ["goal_id", "position"],
+        },
+    },
+    {
+        "name": "set_rotation_group_pointer",
+        "description": (
+            "Manually set a rotation GROUP's pointer (cross-goal cadence, "
+            "ADR-0016). No completion attached; never a side effect of "
+            "log_outcome."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "group_id": {"type": "integer"},
+                "position": {"type": "integer"},
+            },
+            "required": ["group_id", "position"],
         },
     },
     {

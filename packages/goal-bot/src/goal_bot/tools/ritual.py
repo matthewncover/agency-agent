@@ -56,3 +56,10 @@ def register_ritual_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         """Manually set a rotation goal's pointer ('today is a push-up day').
         No completion attached; never a side effect of log_outcome."""
         return uc.set_rotation_pointer(goal_id, position)
+
+    @mcp.tool
+    def set_rotation_group_pointer(group_id: int, position: int) -> dict:
+        """Manually set a rotation GROUP's pointer (ADR-0016 — 'today is a
+        push-up day' when push-ups/pull-ups share one rhythm). No completion
+        attached; never a side effect of log_outcome."""
+        return uc.set_rotation_group_pointer(group_id, position)

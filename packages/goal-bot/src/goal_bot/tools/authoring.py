@@ -81,6 +81,29 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         return uc.create_goal_versions(versions)
 
     @mcp.tool
+    def create_rotation_group(owner: int, name: str, sequence: list[dict]) -> dict:
+        """Create a rotation group (ADR-0016): a cross-goal cadence scheduler
+        for goals sharing one rhythm (push → rest → pull → rest). `sequence`
+        entries are {"goal_id": N} or {"rest": true}; each rest slot consumes
+        one calendar day. Members keep their own bars/logging; a member is
+        excluded from independent scheduling while its group is active, and may
+        belong to at most one active group. Returns the created group."""
+        return uc.create_rotation_group(owner, name, sequence)
+
+    @mcp.tool
+    def archive_rotation_group(group_id: int) -> dict:
+        """Archive a rotation group (authoring edit, e.g. removed from the
+        markdown or stale after rollover). Members degrade gracefully back to
+        self-scheduling on their own recurrence."""
+        return uc.archive_rotation_group(group_id)
+
+    @mcp.tool
+    def list_rotation_groups(owner: int) -> list[dict]:
+        """The owner's active rotation groups (sequence, pointer, members) —
+        the re-ingest reconciliation read (groups go stale at rollover)."""
+        return uc.list_rotation_groups(owner)
+
+    @mcp.tool
     def update_goal(goal_id: int, fields: dict) -> dict:
         """Update goal identity fields (title, chapter_id, archived_at only).
 

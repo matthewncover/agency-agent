@@ -89,6 +89,9 @@ Re-anchoring a recurring goal's bar to the 95% Floor during reassessment is mech
 **`set_rotation_pointer(goal_id, position)`**
 Manual pointer set with no completion attached — "today is a push-up day." A rare, explicit correction affordance, **not** part of the daily loop and **not** a side effect of any other tool (the LLM must never nudge the pointer implicitly). Dedicated on purpose. Pairs with the non-pointer-backdating restriction (§3.1): you correct the pointer directly rather than backdating a workout.
  
+**`set_rotation_group_pointer(group_id, position)`** *(ADR-0016)*
+The same correction affordance for a rotation **group**'s shared pointer. Same rules: no completion attached, never a side effect. (Group pointer *advancement* on `done` is deterministic Python per §1 — computed from the **surfaced** entry via the date-aware walk, never a tool.)
+ 
 ### 3.3 Ingestion authoring surface (ingestion LLM)
  
 Per `goal-markdown.md` §5. The `gid` write-back is **not** a tool — it is the return value of `create_goal` surfaced in the ingestion chat's re-marked markdown output (§5.1).
@@ -103,6 +106,11 @@ The authoring workhorse: new goal bars, bar changes (new version, same id — OQ
 **`update_goal(goal_id, {title?, tags?, chapter_id?, archived_at?})`**
 Mutates the **identity row only**. Tags (the §4 confirmed-tagging step), title, chapter reassignment, archive flag.
 - **Hard boundary:** `update_goal` must **never** grow a `definition`, `recurrence`, `level`, or `completion` param. Identity-row mutation vs. content mutation is the whole point of the identity/version split — content edits go through `create_goal_version`. Smuggling content fields into `update_goal` breaks versioning. (This is the one boundary in the doc most likely to erode under "just add a field"; it's load-bearing.)
+
+**Rotation groups (ADR-0016)** — authored structure from the template's `rotate:` line; groups are schedulers, not goals.
+- **`create_rotation_group(owner, name, sequence)`** — `sequence` entries `{"goal_id": N}` | `{"rest": true}`; member refs validated at write (exist, owner-owned, unarchived, not already in an active group).
+- **`archive_rotation_group(group_id)`** — authoring removal / rollover staleness; members degrade back to self-scheduling.
+- **`list_rotation_groups(owner)`** — the re-ingest reconciliation read (groups reference chapter-scoped `gid`s and go stale at rollover, ADR-0013).
 ### 3.4 Shared reads
  
 Reads the LLMs need mid-conversation that aren't already injected.

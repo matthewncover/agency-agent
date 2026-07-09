@@ -26,6 +26,7 @@ def _clean_db(migrated_engine):
                 "goalbot.friction_log, goalbot.win_log, "
                 "goalbot.anticipated_obstacle, goalbot.goal_tag, "
                 "goalbot.goal_version, goalbot.goal_state, "
+                "goalbot.rotation_group, "
                 "goalbot.goal, goalbot.chapter, "
                 "goalbot.insight, goalbot.tag, "
                 "profile.profile_doc, profile.group_member, "

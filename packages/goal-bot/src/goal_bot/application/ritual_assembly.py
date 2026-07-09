@@ -32,7 +32,10 @@ from goal_bot.domain.recurrence import (
     is_light_day,
     quota_status,
     quota_window_bounds,
-    rotation_current_index,
+    rotation_days_elapsed,
+    rotation_due_index,
+    rotation_group_due_goal_id,
+    rotation_group_member_ids,
 )
 
 # Suggested-item caps (spec §3 "trim for realism"). Needs, must-show, forced
@@ -84,10 +87,14 @@ def _classify(
 
     if rt == RecurrenceType.ROTATION:
         seq = cfg.get("sequence", [])
-        idx = rotation_current_index(
+        state = goals.get_goal_state(goal_id)
+        # Date-aware walk (ADR-0016): each consecutive rest label consumes one
+        # elapsed day since completion — a rest day surfaces nothing.
+        idx = rotation_due_index(
             seq,
-            goals.get_goal_state(goal_id).rotation_index,
+            state.rotation_index,
             cfg.get("rest_labels"),
+            rotation_days_elapsed(state.last_completed_at, plan_date),
         )
         return _Classification(idx is not None, _MUST_SHOW)
 
@@ -180,6 +187,26 @@ def assemble_morning_context(
 
     # 3. Today's eligible goals → classify each via the deterministic mechanics.
     today_goals = goals.get_full_goal_list(person_id, plan_date)
+
+    # 3-pre. Rotation groups (ADR-0016): a goal referenced by an active group
+    # is excluded from per-goal classification — the group is its sole
+    # scheduler. Exactly one member per group can be due on a given day, so
+    # same-day collisions are structurally impossible. (Distinct from the
+    # group-PROFILE fan-out in step 7 — naming is unrelated.)
+    active_goal_ids = {g.id for g in today_goals}
+    rotation_member_ids: set[int] = set()
+    rotation_due_ids: set[int] = set()
+    for grp in goals.list_rotation_groups(person_id):
+        rotation_member_ids.update(rotation_group_member_ids(grp.sequence))
+        due_gid = rotation_group_due_goal_id(
+            grp.sequence,
+            grp.rotation_index,
+            rotation_days_elapsed(grp.last_completed_at, plan_date),
+            active_goal_ids,
+        )
+        if due_gid is not None:
+            rotation_due_ids.add(due_gid)
+
     full_list: list[CandidateItem] = []
     protected: list[CandidateItem] = []  # needs + must-show + forced + carried
     trimmable: list[CandidateItem] = []  # non-need suggested extras
@@ -206,7 +233,12 @@ def assemble_morning_context(
         )
         full_list.append(item)
 
-        cls = _classify(goal.id, chosen, plan_date, goals, plans)
+        if goal.id in rotation_member_ids:
+            # Group member: due iff the shared pointer resolves to it today.
+            # Surfaces must-show, like rotation (spec §3) — never trimmed.
+            cls = _Classification(goal.id in rotation_due_ids, _MUST_SHOW)
+        else:
+            cls = _classify(goal.id, chosen, plan_date, goals, plans)
         # A carried-over commitment always surfaces (presence tracking), even if
         # its recurrence would say "not due today" — dropping a sliding promise
         # is exactly the guilt dynamic we avoid.

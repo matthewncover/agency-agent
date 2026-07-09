@@ -15,9 +15,20 @@ from goal_bot.domain.entities import (
     GoalVersion,
     PlanItemStatus,
     RecurrenceType,
+    RotationGroup,
     WinLogEntry,
 )
-from goal_bot.domain.recurrence import accumulation_reached, is_pointer_recurrence
+from goal_bot.domain.recurrence import (
+    accumulation_reached,
+    is_pointer_recurrence,
+    rotation_current_index,
+    rotation_days_elapsed,
+    rotation_due_index,
+    rotation_group_due_index,
+    rotation_group_index_of_goal,
+    rotation_group_member_ids,
+    rotation_next_index,
+)
 
 # Tags are intentionally absent: there is no tag column on `goal` and no
 # tag/goal_tag write path yet (deferred per goal-markdown.md §4). Listing it
@@ -115,16 +126,22 @@ class GoalUseCases:
         version = self._version_of(existing.goal_id, existing.goal_version_id)
         recurrence = version.recurrence_type if version else None
 
-        # Backdating restriction (mcp-tools §3.1/§5): an interval/rotation goal's
-        # pointer can't be recomputed from a past-dated log, so backdating those
-        # is rejected — pointer correction is a separate tool (set_rotation_pointer,
-        # B6). Non-pointer goals (binary/quantity/duration) backdate freely.
-        if is_pointer_recurrence(recurrence):
-            plan_date = self.plans.get_item_plan_date(daily_plan_item_id)
+        # Rotation-group membership (ADR-0016): fetched once — it extends the
+        # backdating gate below and drives the shared-pointer advance on done.
+        group = self.goals.get_rotation_group_for_goal(existing.goal_id)
+        plan_date = self.plans.get_item_plan_date(daily_plan_item_id)
+
+        # Backdating restriction (mcp-tools §3.1/§5): a pointer's state can't be
+        # recomputed from a past-dated log, so backdating is rejected for
+        # interval/rotation goals AND rotation-group members — pointer correction
+        # is a separate explicit tool (set_rotation_pointer /
+        # set_rotation_group_pointer, B6). Non-pointer goals backdate freely.
+        if is_pointer_recurrence(recurrence) or group is not None:
             if plan_date is not None and plan_date < date.today():
                 raise ValueError(
                     "backdating is restricted to non-pointer goals; "
-                    "interval/rotation pointer correction uses set_rotation_pointer"
+                    "interval/rotation pointer correction uses "
+                    "set_rotation_pointer / set_rotation_group_pointer"
                 )
 
         item = self.plans.set_item_outcome(daily_plan_item_id, st, quantity_actual)
@@ -140,7 +157,9 @@ class GoalUseCases:
             elif st == PlanItemStatus.DONE:
                 # A win halts the chain; `partial` leaves the counter untouched.
                 self.goals.reset_carry_over(item.goal_id)
-                self._advance_pointer_on_done(item.goal_id, version)
+                self._advance_pointer_on_done(
+                    item.goal_id, version, group, plan_date or date.today()
+                )
 
         # Group-goal shared completion (behavior-spec §6): if this goal is
         # group-owned and it was completed, it's "done for both" — mark the
@@ -173,17 +192,67 @@ class GoalUseCases:
                 self.plans.set_item_outcome(member_item.id, PlanItemStatus.DONE)
 
     def _advance_pointer_on_done(
-        self, goal_id: int, version: GoalVersion | None
+        self,
+        goal_id: int,
+        version: GoalVersion | None,
+        group,
+        on: date,
     ) -> None:
         """Completion side effect for pointer goals (mcp-tools §3.1):
-        rotation steps its pointer; interval resets its clock."""
+        rotation steps its pointer; interval resets its clock. A rotation-group
+        member additionally advances the group's shared pointer (ADR-0016).
+        All walks/stamps key off `on` — the item's plan_date (== today for
+        pointer goals, whose backdating is rejected upstream)."""
         if version is None:
             return
+        # Noon keeps the stamp date-exact for the walk (which only reads the
+        # date) without pretending to know a completion time.
+        when = datetime(on.year, on.month, on.day, 12)
+
+        # Rotation group first (ADR-0016): advance the shared pointer one past
+        # the entry this `done` belongs to. The member's own recurrence side
+        # effect below still fires (inert for scheduling while the group is
+        # active, but it keeps e.g. an interval member's clock honest for
+        # graceful degradation if the group is later archived).
+        if group is not None:
+            seq = group.sequence
+            idx = rotation_group_due_index(
+                seq,
+                group.rotation_index,
+                rotation_days_elapsed(group.last_completed_at, on),
+            )
+            if idx is None or seq[idx].get("goal_id") != goal_id:
+                # Off-schedule done (did it early on a rest day, or a second
+                # member logged) — resolve to this goal's next slot instead.
+                idx = rotation_group_index_of_goal(seq, group.rotation_index, goal_id)
+            if idx is not None:
+                self.goals.advance_rotation_group(
+                    group.id, rotation_next_index(idx, len(seq)), when
+                )
+
         if version.recurrence_type == RecurrenceType.ROTATION:
-            seq = version.recurrence_config.get("sequence", [])
-            self.goals.advance_rotation(goal_id, len(seq))
+            cfg = version.recurrence_config
+            seq = cfg.get("sequence", [])
+            state = self.goals.get_goal_state(goal_id)
+            # Advance from the SURFACED slot, not the raw stored pointer —
+            # the stored pointer may sit on a rest label behind the session
+            # that actually surfaced (ADR-0016 bug 2).
+            idx = rotation_due_index(
+                seq,
+                state.rotation_index,
+                cfg.get("rest_labels"),
+                rotation_days_elapsed(state.last_completed_at, on),
+            )
+            if idx is None:
+                idx = rotation_current_index(
+                    seq, state.rotation_index, cfg.get("rest_labels")
+                )
+            if idx is not None:
+                self.goals.advance_rotation(
+                    goal_id, rotation_next_index(idx, len(seq)), when
+                )
         elif version.recurrence_type == RecurrenceType.INTERVAL:
-            self.goals.set_last_completed(goal_id, datetime.now())
+            self.goals.set_last_completed(goal_id, when)
 
     def _version_of(self, goal_id: int, goal_version_id: int) -> GoalVersion | None:
         detail = self.goals.get_goal_detail(goal_id)
@@ -277,6 +346,70 @@ class GoalUseCases:
         side effect of log_outcome (mcp-tools §3.2)."""
         self.goals.set_rotation_pointer(goal_id, position)
         return {"goal_id": goal_id, "position": position, "ok": True}
+
+    # --- rotation groups (ADR-0016) — authored structure, created at ingest ---
+
+    def create_rotation_group(
+        self, owner: int, name: str, sequence: list[dict]
+    ) -> dict:
+        """Create a cross-goal cadence group. `sequence` entries are
+        {"goal_id": N} or {"rest": true}. Goal refs are validated here (the
+        jsonb column carries no FK — app-enforced, ADR-0016): each member must
+        exist, belong to `owner`, be unarchived, and not already be scheduled
+        by another active group (the group is a member's SOLE scheduler)."""
+        member_ids = []
+        for entry in sequence:
+            if entry == {"rest": True}:
+                continue
+            if set(entry) == {"goal_id"} and isinstance(entry["goal_id"], int):
+                member_ids.append(entry["goal_id"])
+                continue
+            raise ValueError(
+                'sequence entries must be {"goal_id": N} or {"rest": true}; '
+                f"rejected: {entry!r}"
+            )
+        if not member_ids:
+            raise ValueError("a rotation group needs at least one member goal")
+
+        for gid in member_ids:
+            detail = self.goals.get_goal_detail(gid)
+            if detail is None:
+                raise ValueError(f"no goal {gid}")
+            goal = detail[0]
+            if goal.owner_profile_id != owner:
+                raise ValueError(f"goal {gid} does not belong to owner {owner}")
+            if goal.archived_at is not None:
+                raise ValueError(f"goal {gid} is archived")
+            existing = self.goals.get_rotation_group_for_goal(gid)
+            if existing is not None:
+                raise ValueError(
+                    f"goal {gid} is already scheduled by rotation group "
+                    f"{existing.id} ({existing.name!r}); a goal has one scheduler"
+                )
+
+        group = self.goals.create_rotation_group(
+            RotationGroup(owner_profile_id=owner, name=name, sequence=sequence)
+        )
+        return group.model_dump()
+
+    def set_rotation_group_pointer(self, group_id: int, position: int) -> dict:
+        """Manually set a group's pointer ('today is a push-up day'). Mirrors
+        set_rotation_pointer — no completion attached, never a side effect."""
+        self.goals.set_rotation_group_pointer(group_id, position)
+        return {"group_id": group_id, "position": position, "ok": True}
+
+    def archive_rotation_group(self, group_id: int) -> dict:
+        """Archive a group (authoring edit, like removal-from-markdown — not a
+        miss consequence). Members degrade gracefully back to self-scheduling
+        on their own recurrence."""
+        self.goals.set_rotation_group_archived(group_id, datetime.now())
+        return {"group_id": group_id, "archived": True}
+
+    def list_rotation_groups(self, owner: int) -> list[dict]:
+        return [
+            {**g.model_dump(), "member_goal_ids": rotation_group_member_ids(g.sequence)}
+            for g in self.goals.list_rotation_groups(owner)
+        ]
 
     # --- reads ---
 

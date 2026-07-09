@@ -1,7 +1,8 @@
 # Goal-Markdown — Authoring Template & Ingestion Contract
  
-> **Doc:** `doc/templates/goal-markdown.md` · **v0.5** · status: Phase-2 (chat T) output
+> **Doc:** `doc/templates/goal-markdown.md` · **v0.6** · status: Phase-2 (chat T) output
 > **Role:** Defines (a) the markdown you write goals in (Obsidian), and (b) the contract the *separate* ingestion chat follows to turn that markdown into structured DB records per spec §6. Ingestion runs in its own Claude chat, **not** the Telegram bot. This doc does not build the runtime.
+> **v0.5 → v0.6:** **rotation groups** (ADR-0016): goals sharing one alternating rhythm (pushups / pull-ups) stay separate goals and get a `rotate:` line naming the shared sequence (§2.0, §3.5). The §3.5 "two independent 4-day clocks" artifact is retired — local testing showed the drift is not acceptable (both surfaced the same day).
 > **v0.4 → v0.5:** unlabeled one-offs default to **`level=need`** (§2.0, §3.3, §4) — a bare one-off is a committed floor, not a stretch; an explicit `need:`/`want:` label still wins.
 > **v0.3 → v0.4:** pushups resolved (`quantity` ⇒ split into two goals). `accumulation` added to the recurrence enum (4h painting). **Goals are chapter-scoped** — rollover creates fresh goals in the new chapter (§5.6); cross-chapter lineage deferred. Tag starter-set + lightweight stance recorded. Group-profile model for shared goals noted as an architecture decision (dissolves OQ-16).
 > **v0.2 → v0.3:** reverted to spec §6's **two-version** model (need + want are separate `goal_version` rows) — keeps level on the pinned version; `why`/`obstacles` written to all active versions on ingest.
@@ -32,6 +33,7 @@
   - **`fixed_schedule` must name the days** (weekdays, or month dates) — that's what distinguishes it from `quota`.
   - `cadence: accumulation 4h/chapter` — cumulative target over the chapter (sums logged progress; done at target).
 - Other optional inline overrides: `completion: binary` · `paused` (dormant, not dropped) · `target: 2026-07-01` (one-off due date).
+- **Rotation group (ADR-0016)** — goals that share one alternating rhythm keep their own blocks (own bars, own logging) plus ONE `rotate:` line anywhere in the section naming the cycle: `rotate: [pushups, rest, pull-ups, rest]`. Entries name goal titles (resolved to `gid`s at ingest) or `rest` (consumes one calendar day). Ingestion creates/updates the group; a goal in a group is scheduled *only* by the group. At rollover the group is re-created against the new chapter's fresh `gid`s (§5.5).
 ### 2.1 Shape
  
 ```markdown
@@ -142,7 +144,17 @@ One block = one goal = one ID, whatever the bar count. `need:` only → need-onl
  
 - **pushups** — need 50 / want 75
 - **pull-ups** — need 20 / want 30
-`why` copied to both. *Note: the qualitative "4s eccentric" lives in `definition` text.* **Consequence:** two independent 4-day clocks. If you always train both in one session they reset together; they only drift if you do one without the other — acceptable artifact. (Binary-one-goal is the fallback if the split annoys you.)
+`why` copied to both. *Note: the qualitative "4s eccentric" lives in `definition` text.*
+
+**Coupled rhythm → rotation group (ADR-0016; retires the v0.4 "acceptable drift" note).** Two independent interval clocks drift into phase and surface both goals the same day — local testing proved this unacceptable. When the real pattern is one alternating rhythm (push → rest → pull → rest), add a `rotate:` line:
+
+```markdown
+- pushups and pullups, alternating with rest days
+  - (two goal blocks as above)
+rotate: [pushups, rest, pull-ups, rest]
+```
+
+→ the two goals stay first-class (own need/want bars, own rep logging) and a **rotation group** owns the cadence: exactly one member surfaces per session day, each `rest` consumes one calendar day, a miss holds the pointer so everything downstream shifts. Doing pushups Friday puts pull-ups on Sunday; skipping pushups Friday moves pushups to Saturday and pull-ups to Monday.
  
 ### 3.6 Accumulation — cumulative target over the chapter
  
@@ -222,7 +234,7 @@ Nothing commits until the confirm queue clears.
  
 ## 6. Remaining markdown↔schema friction (flags)
  
-1. **Multi-measure goals can't be one quantity goal.** A goal bundling two measured things (pushups *and* pull-ups) has two `target_quantity`/`unit` pairs but a version holds one — so if you want quantity logging, it splits into two goals (§3.5). Binary one-goal avoids the split. Confirmed at ingest.
+1. **Multi-measure goals can't be one quantity goal.** A goal bundling two measured things (pushups *and* pull-ups) has two `target_quantity`/`unit` pairs but a version holds one — so if you want quantity logging, it splits into two goals (§3.5). Binary one-goal avoids the split. Confirmed at ingest. If the split goals share one alternating rhythm, couple them with a `rotate:` line (rotation group, ADR-0016) so their clocks can't drift onto the same day.
 2. **Quota vs fixed_schedule** is genuinely ambiguous in English and is the one recurring confirm; `cadence:` pre-empts it, and `fixed_schedule` authored loosely must name its days.
 3. **Rotation** doesn't fall out of natural phrasing; needs `cadence: rotation [...]` or a heavy confirm. Lowest priority — no live instance.
 4. **Chapter scoping** from one dated file maps to per-person chapters + a shared one; LLM proposes, you approve.

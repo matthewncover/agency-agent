@@ -19,6 +19,7 @@ _RITUAL_GRANT: frozenset[str] = frozenset(
         # only offers, so nothing here ever executes without a conversational choice.
         "set_goal_lifecycle",
         "set_rotation_pointer",
+        "set_rotation_group_pointer",
         "create_goal_version",
         "get_full_goal_list",
         "get_plan",

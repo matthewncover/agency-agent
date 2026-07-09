@@ -10,6 +10,7 @@ from goal_bot.domain.entities import (
     GoalVersion,
     Insight,
     PlanItemStatus,
+    RotationGroup,
     WinLogEntry,
 )
 
@@ -96,14 +97,58 @@ class GoalRepositoryPort(ABC):
     def get_goal_state(self, goal_id: int) -> GoalState: ...
 
     @abstractmethod
-    def advance_rotation(self, goal_id: int, sequence_len: int) -> int:
-        """Step the rotation pointer one past the current slot (wraps). `done`
-        only — a miss holds the pointer so the item re-surfaces (spec §5)."""
+    def advance_rotation(self, goal_id: int, new_index: int, when: datetime) -> int:
+        """Set the rotation pointer to `new_index` and stamp last_completed_at
+        to `when`. `done` only — a miss holds the pointer so the item
+        re-surfaces (spec §5). The caller computes new_index from the SURFACED
+        slot via the domain walk (ADR-0016), never from the raw stored pointer."""
         ...
 
     @abstractmethod
     def set_last_completed(self, goal_id: int, when: datetime) -> None:
         """Stamp an interval goal's completion clock (resets its due window)."""
+        ...
+
+    # --- rotation groups (ADR-0016) — the cross-goal cadence scheduler ---
+    # A group is NOT a goal: sequence of {"goal_id": N} | {"rest": true}
+    # entries plus the shared pointer. Pointer advances ONLY on an engaged
+    # `done` of the surfaced member; a miss holds it; silence touches nothing.
+
+    @abstractmethod
+    def create_rotation_group(self, group: RotationGroup) -> RotationGroup: ...
+
+    @abstractmethod
+    def get_rotation_group(self, group_id: int) -> RotationGroup | None: ...
+
+    @abstractmethod
+    def list_rotation_groups(self, owner_profile_id: int) -> list[RotationGroup]:
+        """The owner's ACTIVE (non-archived) groups — the assemble-path read."""
+        ...
+
+    @abstractmethod
+    def get_rotation_group_for_goal(self, goal_id: int) -> RotationGroup | None:
+        """The active group whose sequence references the goal, if any — the
+        sole-scheduler membership check (at most one, app-enforced at create)."""
+        ...
+
+    @abstractmethod
+    def advance_rotation_group(
+        self, group_id: int, new_index: int, when: datetime
+    ) -> int:
+        """Set the group pointer to `new_index` and stamp last_completed_at to
+        `when` — the `done` side effect, computed from the surfaced entry."""
+        ...
+
+    @abstractmethod
+    def set_rotation_group_pointer(self, group_id: int, position: int) -> None:
+        """Manually set the group pointer — no completion attached (mirrors
+        set_rotation_pointer, mcp-tools §3.2)."""
+        ...
+
+    @abstractmethod
+    def set_rotation_group_archived(self, group_id: int, when: datetime | None) -> None:
+        """Archive/unarchive a group. Members degrade gracefully back to their
+        own recurrence when no active group schedules them."""
         ...
 
     # --- reassessment lifecycle (B6, mcp-tools §3.2). NEVER auto-fired: only an

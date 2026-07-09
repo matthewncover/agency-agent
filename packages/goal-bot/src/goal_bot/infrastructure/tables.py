@@ -106,6 +106,30 @@ anticipated_obstacle = Table(
     Column("text", Text, nullable=False),
 )
 
+rotation_group = Table(
+    "rotation_group",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "owner_profile_id",
+        BigInteger,
+        ForeignKey("profile.profile.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("name", Text, nullable=False),
+    # ordered entries: {"goal_id": N} | {"rest": true}; refs validated at write
+    Column("sequence", JSONB, nullable=False),
+    Column("rotation_index", Integer, nullable=False, server_default="0"),
+    Column("last_completed_at", TIMESTAMP(timezone=True)),
+    Column(
+        "created_at",
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    ),
+    Column("archived_at", TIMESTAMP(timezone=True)),
+)
+
 goal_state = Table(
     "goal_state",
     metadata,
