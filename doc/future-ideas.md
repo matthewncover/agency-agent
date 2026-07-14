@@ -2,6 +2,13 @@
  
 Holding pen for design ideas that are wanted but deliberately out of MVP scope. An idea here is not committed; it is recorded so it isn't lost and doesn't clutter MVP docs.
  
+## Smarter respond/don't-respond signals in group chats
+MVP gates bot responses on an explicit addressing signal (Telegram-native: replies to the bot's messages and `/commands`; see privacy mode). There are likely more clever or interesting ways for the bot to know when it's being talked to without an explicit marker:
+- **LLM addressee detection** — classify whether a message is plausibly aimed at the bot (content, second-person cues, continuity with the open session) before responding.
+- **Conversational window** — after being explicitly addressed, treat the same sender's follow-ups for a short window as addressed too, so a back-and-forth doesn't require re-tagging every message.
+- **Telegram forum topics** — a dedicated topic/thread in the group that is "the bot's room"; anything posted there is addressed to it.
+Why parked: implicit addressing has a real false-positive cost (bot butting into human conversation reads as intrusive and erodes the low-friction feel). Explicit signals are the platform convention and good enough for MVP; revisit once real group usage shows where the explicit marker chafes.
+
 ## Periodic cross-bot profile synthesis (human-gated)
 The agent observes the individual across both capabilities (task observations in task-tracker; goal observations in goal-bot). Periodically — on the order of every ~10 weeks — it can surface a digest of hypotheses about the person: "here's what I've noticed about you." For each, the human decides: is it true, how much does it matter, should it be weighted by the agent or excluded from context. Approved items graduate into the Tier-1 authored profile in the `profile` package.
  

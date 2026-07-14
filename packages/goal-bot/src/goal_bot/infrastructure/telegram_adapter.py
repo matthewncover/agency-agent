@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import date
 
 from agency_profile.domain.entities import Person
@@ -18,11 +19,39 @@ from goal_bot.application.morning_turn import Session
 _log = logging.getLogger(__name__)
 
 
+def is_addressed(
+    chat_type: str,
+    text: str,
+    bot_username: str,
+    bot_id: int,
+    reply_to_from_id: int | None,
+) -> bool:
+    """Explicit-addressing gate for group chats. Gating lives in code rather
+    than in BotFather's privacy mode because that setting can't be trusted:
+    an admin grant or a privacy toggle silently changes what Telegram
+    delivers. Private chats are always addressed; in a group the message must
+    be a reply to the bot's own message or @mention the bot."""
+    if chat_type == "private":
+        return True
+    if reply_to_from_id is not None and reply_to_from_id == bot_id:
+        return True
+    return bool(re.search(rf"@{re.escape(bot_username)}\b", text, re.IGNORECASE))
+
+
+def strip_mention(text: str, bot_username: str) -> str:
+    """Remove @mentions of the bot so downstream sees the message itself."""
+    return re.sub(
+        rf"@{re.escape(bot_username)}\b", "", text, flags=re.IGNORECASE
+    ).strip()
+
+
 class TelegramAdapter:
     """Multi-person Telegram front end (B7). Holds a chat→person mapping; each
     person gets their own morning job (fired at their local time) and inbound
     messages route by chat id to the right person's session. Auth is a
-    membership check against the known chats."""
+    membership check against the known chats. In group chats the bot only
+    answers when explicitly addressed: /commands, replies to its own
+    messages, or @mentions (see is_addressed)."""
 
     def __init__(
         self,
@@ -94,11 +123,22 @@ class TelegramAdapter:
         person_id = self._auth(update)
         if person_id is None:
             return
+        bot = context.bot
+        reply_to = update.message.reply_to_message
+        if not is_addressed(
+            update.effective_chat.type,
+            update.message.text or "",
+            bot.username or "",
+            bot.id,
+            reply_to.from_user.id if reply_to and reply_to.from_user else None,
+        ):
+            return
         chat_id = update.effective_chat.id
         session = self._sessions.get(chat_id)
         if not session:
             return
-        session = self._service.handle_reply(session, update.message.text)
+        text = strip_mention(update.message.text, bot.username or "")
+        session = self._service.handle_reply(session, text)
         self._sessions[chat_id] = session
         if session.response_text:
             await update.message.reply_text(session.response_text)

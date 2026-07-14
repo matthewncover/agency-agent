@@ -5,7 +5,11 @@ from datetime import time
 from agency_profile.domain.entities import Person
 from goal_bot.config import Settings
 from goal_bot.infrastructure.scheduler import schedule_morning
-from goal_bot.infrastructure.telegram_adapter import TelegramAdapter
+from goal_bot.infrastructure.telegram_adapter import (
+    TelegramAdapter,
+    is_addressed,
+    strip_mention,
+)
 
 _TOKEN = "123456:ABCdefGHIjklMNOpqrs"
 
@@ -117,3 +121,40 @@ def test_morning_job_targets_the_persons_own_chat():
     # each person's job is a distinct callable bound to their chat
     assert callable(a.morning_job_for(1))
     assert callable(a.morning_job_for(2))
+
+
+# --- group-chat addressing gate ----------------------------------------------
+
+_BOT_ID = 123456
+_BOT_USERNAME = "goal_bot"
+
+
+def test_private_chat_is_always_addressed():
+    assert is_addressed("private", "did the thing", _BOT_USERNAME, _BOT_ID, None)
+
+
+def test_group_plain_text_is_not_addressed():
+    assert not is_addressed("group", "did the thing", _BOT_USERNAME, _BOT_ID, None)
+
+
+def test_group_reply_to_bot_is_addressed():
+    assert is_addressed("group", "did the thing", _BOT_USERNAME, _BOT_ID, _BOT_ID)
+
+
+def test_group_reply_to_someone_else_is_not_addressed():
+    assert not is_addressed("group", "did the thing", _BOT_USERNAME, _BOT_ID, 777)
+
+
+def test_group_mention_is_addressed_case_insensitive():
+    assert is_addressed("group", "@Goal_Bot did the thing", _BOT_USERNAME, _BOT_ID, None)
+    assert is_addressed("group", "did the thing @goal_bot", _BOT_USERNAME, _BOT_ID, None)
+
+
+def test_group_mention_of_similar_username_is_not_addressed():
+    assert not is_addressed("group", "@goal_bot2 hi", _BOT_USERNAME, _BOT_ID, None)
+
+
+def test_strip_mention_removes_bot_tag_only():
+    assert strip_mention("@goal_bot did the thing", _BOT_USERNAME) == "did the thing"
+    assert strip_mention("did the thing", _BOT_USERNAME) == "did the thing"
+    assert strip_mention("ask @someone_else", _BOT_USERNAME) == "ask @someone_else"
