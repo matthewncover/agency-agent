@@ -36,6 +36,8 @@ run**, don't work from memory:
 
 Authoring: `create_goals`, `create_goal_versions` (batch — **prefer these**),
 `create_chapter`, `create_goal`, `create_goal_version` (singles), `update_goal`.
+Rotation groups (ADR-0016): `create_rotation_group`, `archive_rotation_group`,
+`list_rotation_groups`.
 Reads: `get_active_chapter`, `get_full_goal_list`, `get_goal_detail`,
 `get_goals_for_chapter`.
 Deterministic goal-setting / re-ingest ops (B2): `propose_candidates`,
@@ -118,10 +120,26 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
      individual's private chapter, ADR-0013) with its `reason`.
    - Plus the parse-side calls: quota-vs-fixed, bucket explode, multi-measure
      split, tag proposals, uncertain task matches.
+   - **Coupled rhythm → rotation group (ADR-0016).** A `rotate: [a, rest, b,
+     rest]` line is an explicit group instruction. Also *propose* a group
+     (confirm, never silent) when a multi-measure split yields goals whose
+     phrasing implies one alternating rhythm ("alternating", "then", shared
+     "every N days" on movements trained on different days) — two independent
+     interval clocks WILL drift onto the same day; that's the failure this
+     feature exists for. Never model the coupled case as two bare intervals
+     without at least offering the group.
    Show inferred fields inline. **Nothing commits until the queue clears.**
 6. **Write** via the tools — `create_goals` for new goals, `create_goal_versions`
    for the `version_bump` classifications, `rollover` for a new window. Batch;
-   don't write one goal at a time.
+   don't write one goal at a time. **Rotation groups write last** (they need the
+   member `gid`s): `create_rotation_group(owner, name, sequence)` with entries
+   `{"goal_id": N}` / `{"rest": true}`. Members keep their natural recurrence
+   (e.g. `interval`) on their versions — it goes inert while the group is
+   active and is the graceful fallback if the group is archived.
+   **At rollover, groups go stale by construction** (they reference the prior
+   chapter's goal ids): `list_rotation_groups(owner)` → for each group whose
+   members were carried forward, `archive_rotation_group` the old one and
+   re-create it against the new `gid`s, preserving the sequence order.
 7. **Write `gid`s back into the source file** — Edit the markdown directly,
    appending `<!--gid:N-->` to each goal heading (one per goal; each exploded
    one-off gets its own). This is the Claude Code advantage over the old
