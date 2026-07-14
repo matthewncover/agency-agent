@@ -13,6 +13,8 @@ dependencies = [
     "anthropic>=0.40",
     "python-telegram-bot>=21",
     "apscheduler>=3.10,<4",
+    "httpx>=0.27",        # heartbeat pinger (ADR-0017); already transitive via anthropic
+
 ]
 
 [project.scripts]

@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from task_tracker.application.query_client import TaskQueryClient
 from task_tracker.infrastructure.task_query_client import PgTaskQueryClient
 
+from goal_bot.application.heartbeat_port import HeartbeatPort, NoopHeartbeat
 from goal_bot.application.morning_service import MorningService
 from goal_bot.application.morning_turn import MorningTurn
 from goal_bot.application.use_cases import GoalUseCases
@@ -18,6 +19,7 @@ from goal_bot.infrastructure.adapters.goal_repo import SqlAlchemyGoalRepository
 from goal_bot.infrastructure.adapters.plan_repo import SqlAlchemyPlanRepository
 from goal_bot.infrastructure.adapters.win_repo import SqlAlchemyWinRepository
 from goal_bot.infrastructure.anthropic_llm import AnthropicLLMAdapter
+from goal_bot.infrastructure.heartbeat import HttpHeartbeat
 from goal_bot.infrastructure.scheduler import schedule_morning
 from goal_bot.infrastructure.telegram_adapter import TelegramAdapter
 from goal_bot.server import RITUAL_TOOL_DEFS
@@ -46,6 +48,15 @@ def build_task_query_client(engine: Engine) -> TaskQueryClient:
     return PgTaskQueryClient(engine)
 
 
+def build_heartbeat(settings: Settings) -> HeartbeatPort:
+    """The liveness dead-man's-switch pinger (ADR-0017). Configured URL ⇒ HTTP
+    adapter; unconfigured ⇒ no-op, so dev/tests need no external watchdog."""
+    url = settings.heartbeat_url.strip()
+    if url:
+        return HttpHeartbeat(url, timeout=settings.heartbeat_timeout)
+    return NoopHeartbeat()
+
+
 def build_app(settings: Settings) -> App:
     _log.info("build_app: start (person_id=%s)", settings.person_id)
     engine = make_engine(settings.database_url)
@@ -54,8 +65,10 @@ def build_app(settings: Settings) -> App:
     plans = SqlAlchemyPlanRepository(engine)
     wins = SqlAlchemyWinRepository(engine)
     profiles = SqlAlchemyProfileRepository(engine)
-    uc = GoalUseCases(goals=goals, plans=plans, wins=wins, profiles=profiles)
     tasks = build_task_query_client(engine)
+    uc = GoalUseCases(
+        goals=goals, plans=plans, wins=wins, profiles=profiles, tasks=tasks
+    )
     _log.info("build_app: use-cases ready")
 
     llm = AnthropicLLMAdapter(
@@ -82,6 +95,8 @@ def build_app(settings: Settings) -> App:
     _log.info("build_app: chat→person map = %s", chat_person)
 
     scheduler = AsyncIOScheduler()
+    heartbeat = build_heartbeat(settings)
+    _log.info("build_app: heartbeat = %s", type(heartbeat).__name__)
     _log.info("build_app: building TelegramAdapter")
     telegram = TelegramAdapter(
         token=settings.telegram_bot_token,
@@ -89,6 +104,7 @@ def build_app(settings: Settings) -> App:
         persons=persons,
         service=service,
         scheduler=scheduler,
+        heartbeat=heartbeat,
     )
     _log.info("build_app: TelegramAdapter ready")
 

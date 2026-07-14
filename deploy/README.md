@@ -118,6 +118,32 @@ RESTORE_URL=postgresql://goalbot:...@localhost:5432/agency_restore_test \
 # eyeball row counts, then dropdb agency_restore_test
 ```
 
+## Liveness heartbeat (ADR-0017)
+
+A dead bot looks exactly like a quiet day (null-tolerance), so an **external
+dead-man's switch** watches the system's promise to show up: the bot GETs
+`HEARTBEAT_URL` after each successful **scheduled** morning send, and the
+external watchdog alerts a human when the expected ping goes missing. The
+monitor deliberately lives off-box and alerts off-Telegram — it must not share
+fate with what it watches. Unset `HEARTBEAT_URL` ⇒ no-op (dev/tests).
+
+Manual setup (once):
+
+1. Create a check at [healthchecks.io](https://healthchecks.io) (free tier;
+   self-hosted works identically): **Period = 1 day, Grace = 2 hours** — alert
+   if no successful morning send in > 26 h.
+2. Set the check's alert channel to email/push (something that is **not**
+   Telegram).
+3. Put the check's ping URL in `/etc/agency-agent/agency.env` as
+   `HEARTBEAT_URL=...`. The URL is a secret — never commit it.
+4. `sudo systemctl restart goal-bot`, then after the next scheduled morning,
+   confirm the check shows a fresh ping.
+
+One check covers the deployment: any person's successful scheduled send pings
+it (per-person checks are a later refinement, see ADR-0017). The `/morning`
+debug command intentionally does **not** ping — manual pokes must not mask a
+dead scheduler.
+
 ## Data going live (one-way)
 
 Decide once: seed prod fresh via real ingestion, or migrate dev data in. Never

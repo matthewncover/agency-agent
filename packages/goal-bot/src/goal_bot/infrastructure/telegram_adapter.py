@@ -11,6 +11,7 @@ from telegram.ext import (
     filters,
 )
 
+from goal_bot.application.heartbeat_port import HeartbeatPort, NoopHeartbeat
 from goal_bot.application.morning_service import MorningService
 from goal_bot.application.morning_turn import Session
 
@@ -30,11 +31,13 @@ class TelegramAdapter:
         persons: dict[int, Person],
         service: MorningService,
         scheduler=None,
+        heartbeat: HeartbeatPort | None = None,
     ) -> None:
         self._chat_person = dict(chat_person)  # chat_id -> person_id
         self._person_chat = {p: c for c, p in chat_person.items()}
         self._persons = dict(persons)  # person_id -> Person
         self._service = service
+        self._heartbeat = heartbeat or NoopHeartbeat()
         self._sessions: dict[int, Session] = {}  # keyed by chat_id
 
         builder = Application.builder().token(token)
@@ -120,12 +123,18 @@ class TelegramAdapter:
         chat_id = self._person_chat[person_id]
         sessions = self._sessions
         app = self._app
+        heartbeat = self._heartbeat
 
         async def _job() -> None:
             session = service.fire_morning(person_id, date.today())
             sessions[chat_id] = session
             if session.response_text:
                 await app.bot.send_message(chat_id=chat_id, text=session.response_text)
+                # Liveness ping (ADR-0017): only after the message actually went
+                # out, and only on the *scheduled* path — a manual /morning must
+                # not mask a dead scheduler. Keyed to delivery, never to whether
+                # the user replies.
+                await heartbeat.ping()
 
         return _job
 

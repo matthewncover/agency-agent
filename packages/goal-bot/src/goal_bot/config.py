@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     telegram_chat_map: str = ""
     debug_morning_interval: int = 0  # seconds; 0 = use cron at person's local time
     morning_time: str = ""  # HH:MM override; "" = use person.morning_prompt_local_time
+    # Liveness (ADR-0017): external dead-man's-switch ping URL (e.g. a
+    # healthchecks.io check), pinged after each successful scheduled morning
+    # send. Empty = no-op heartbeat (dev/tests need no external service).
+    heartbeat_url: str = ""
+    heartbeat_timeout: float = 10.0  # seconds; HTTP timeout for the ping
 
     def chat_person_pairs(self) -> list[tuple[int, int]]:
         """Resolved (chat_id, person_id) pairs. Parses telegram_chat_map if set,

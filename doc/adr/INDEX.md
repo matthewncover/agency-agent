@@ -19,5 +19,7 @@ The entry point for decisions: read this to find the right ADR, never the raw di
 | [0014](0014-three-package-mvp.md) | Defer the standalone `agent`/`app` package split; MVP = three packages | Accepted | [ADR-0010](0010-agent-runtime-composition-split.md), [ADR-0006](0006-five-packages.md) | — |
 | [0015](0015-language-python.md) | Implementation language is Python (the "TypeScript monorepo" assumption was never a decision) | Accepted | — (creates a decision where only an assumption existed) | — |
 | [0016](0016-rotation-groups.md) | Rotation groups — cadence is scheduled across member goals, not inside one | Accepted | — | — |
+| [0017](0017-liveness-heartbeat.md) | Liveness heartbeat — an external dead-man's switch watches the system's promise to show up | Accepted | — | — |
+| [0018](0018-private-tasks.md) | Private personal tasks are invisible outside the personal tracker; sharing is decided by which server a bot mounts | Accepted | — | — |
 
 > ADRs 0001–0003 are referenced in project history (see the prior combined-bundle index and `doc/process/meta-plan.md`) but were not part of the split bundle; no per-file ADR bodies exist for them yet.
