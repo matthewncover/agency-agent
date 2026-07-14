@@ -1,7 +1,7 @@
 # Task Tracker MCP Server
 
 Personal productivity MCP server exposing task and time tracking tools
-for a Claude Project. SQLite-backed, clean architecture, Python.
+for a Claude Project. Postgres, clean architecture, Python.
 
 ## Spec
 
