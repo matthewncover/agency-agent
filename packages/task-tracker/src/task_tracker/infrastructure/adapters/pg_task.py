@@ -32,11 +32,25 @@ _WORK_COMMITMENT_ORDER = case(
 
 class PgTaskRepositoryAdapter(TaskRepositoryPort):
     """Postgres task repository. `owner_id` stamps every write and scopes every
-    read, so the person is a DB fact rather than an app assumption (ADR-0004)."""
+    read, so the person is a DB fact rather than an app assumption (ADR-0004).
 
-    def __init__(self, engine: Engine, owner_id: int):
+    `include_private=False` builds the shared-surface variant (ADR-0018): every
+    personal-task read adds `private = false`, so private tasks are invisible —
+    indistinguishable from nonexistent — at the SQL layer, not by caller
+    discipline."""
+
+    def __init__(self, engine: Engine, owner_id: int, include_private: bool = True):
         self._engine = engine
         self._owner_id = owner_id
+        self._include_private = include_private
+
+    def _privacy(self, tbl) -> list:
+        """Extra WHERE criteria hiding private personal tasks on the shared
+        surface. Empty (a no-op in `.where()`) for the full-access adapter and
+        for work_tasks, which carry no private column."""
+        if tbl is t.personal_tasks and not self._include_private:
+            return [tbl.c.private.is_(False)]
+        return []
 
     def create_work_task(self, task: WorkTaskEntity) -> WorkTaskEntity:
         with self._engine.begin() as c:
@@ -79,6 +93,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
                     commitment_notes=task.commitment_notes,
                     priority_rank=task.priority_rank,
                     pinned=task.pinned,
+                    private=task.private,
                     notes=task.notes,
                 )
                 .returning(t.personal_tasks)
@@ -182,6 +197,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
                 conds = [
                     tbl.c.owner_id == self._owner_id,
                     or_(tbl.c.title.like(like), tbl.c.notes.like(like)),
+                    *self._privacy(tbl),
                 ]
                 if not include_done:
                     conds.append(tbl.c.status != "done")
@@ -279,6 +295,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
                 .where(t.personal_tasks.c.status.notin_(_OPEN_STATES))
                 .where(t.personal_tasks.c.deleted_at.is_(None))
                 .where(t.personal_tasks.c.parent_task_id.is_(None))
+                .where(*self._privacy(t.personal_tasks))
                 .order_by(
                     func.coalesce(t.personal_tasks.c.tier, 99),
                     func.coalesce(t.personal_tasks.c.priority_rank, 999999),
@@ -340,6 +357,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
                 .where(t.personal_tasks.c.deleted_at.is_(None))
                 .where(t.personal_tasks.c.updated_at >= start)
                 .where(t.personal_tasks.c.updated_at < end)
+                .where(*self._privacy(t.personal_tasks))
             ).all()
 
         work_tasks = [row_to_work_task(r) for r in work_rows]
@@ -376,6 +394,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
             .where(t.personal_tasks.c.id == task_id)
             .where(t.personal_tasks.c.owner_id == self._owner_id)
             .where(t.personal_tasks.c.deleted_at.is_(None))
+            .where(*self._privacy(t.personal_tasks))
         ).one_or_none()
         if row is None:
             return None
@@ -384,6 +403,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
             select(t.personal_tasks)
             .where(t.personal_tasks.c.parent_task_id == task_id)
             .where(t.personal_tasks.c.deleted_at.is_(None))
+            .where(*self._privacy(t.personal_tasks))
         ).all()
         task.children = [row_to_personal_task(r) for r in child_rows]
         return task
@@ -398,6 +418,7 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
                 .where(tbl.c.parent_task_id == task.id)
                 .where(tbl.c.status.notin_(_OPEN_STATES))
                 .where(tbl.c.deleted_at.is_(None))
+                .where(*self._privacy(tbl))
                 .order_by(func.coalesce(tbl.c.priority_rank, 999999))
             ).all()
             task.children = [to_entity(r) for r in child_rows]

@@ -56,6 +56,7 @@ class PersonalTaskFactory:
         commitment_notes: str | None = None,
         priority_rank: int | None = None,
         pinned: bool = False,
+        private: bool = False,
         notes: str | None = None,
     ) -> PersonalTaskEntity:
         return PersonalTaskEntity(
@@ -68,5 +69,6 @@ class PersonalTaskFactory:
             commitment_notes=commitment_notes,
             priority_rank=priority_rank,
             pinned=pinned,
+            private=private,
             notes=notes,
         )

@@ -293,6 +293,7 @@ def build_use_cases(engine: Engine) -> GoalUseCases:
         plans=SqlAlchemyPlanRepository(engine),
         wins=SqlAlchemyWinRepository(engine),
         profiles=SqlAlchemyProfileRepository(engine),  # shared-completion (B7)
+        tasks=PgTaskQueryClient(engine),  # task_ref validation (ADR-0018)
     )
 
 

@@ -28,6 +28,8 @@ No ambiguity about what layer a component belongs to from its name alone.
 
 **SDK:** Python with `fastmcp`. Fall back to base `mcp` SDK if fastmcp lacks required features.
 
+**Two server surfaces (ADR-0018):** `create_app()` (`python -m task_tracker`) is the full personal server. `create_shared_app()` (`python -m task_tracker --shared`) is a read-only surface for bots other people can talk to: it grants only `get_task_detail`, `get_open_tasks`, `search_tasks`, `get_tasks_updated_on`, backed by a repository that adds `private = false` to every personal-task read at the SQL layer (including child-task loads). Privacy is enforced by which server a bot's MCP config mounts — never by prompts or client-side tool filtering. goal-bot itself never mounts either server; it reads through the typed `TaskQueryClient` port (ADR-0007), which applies the same private filter.
+
 **Testing:** `pytest`. Claude Code should write and run tests during development.
 
 **Linting & Formatting:** `ruff`. PEP 8 enforced via `ruff check .` and `ruff format .`. Configure in `pyproject.toml`. The linter is authoritative for style — no additional style rules in CLAUDE.md or code comments.
@@ -92,6 +94,7 @@ Personal items across all tiers — deadlines, errands, projects, deferred dream
 | commitment_notes | TEXT | Nullable. Freeform. |
 | priority_rank | INTEGER | Nullable. Relative ordering **scoped to tier**. |
 | pinned | BOOLEAN | Default false. Pinned Tier 3 items appear in the "what this is all for" tracker section. |
+| private | BOOLEAN | Default false. Invisible to goal-bot and to the shared task surface (ADR-0018) — never a goal candidate, never referenceable, `get_task_status` answers None. Prospective only: flipping it retracts nothing already ingested. Full personal tracker unaffected. |
 | notes | TEXT | Rich notes — returned only by detail endpoints. |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
@@ -263,6 +266,7 @@ params:
   commitment_notes: "Context for commitments: who, when, what was promised"
   priority_rank: "Relative ordering. Scoped to commitment_level (work) or tier (personal). Rank 1 = highest within that scope."
   pinned: "Personal Tier 3 only. Pinned items appear in the 'what this is all for' motivational section of the tracker."
+  private: "Personal tasks only. Private tasks are invisible to goal-bot and to the shared task surface — use for anything that shouldn't surface outside this tracker (e.g. gifts, surprises)."
   notes: "Detailed context, history, or background. Not shown in list views."
 ```
 

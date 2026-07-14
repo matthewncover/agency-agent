@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS personal_tasks (
     commitment_notes TEXT,
     priority_rank INTEGER,
     pinned BOOLEAN NOT NULL DEFAULT 0,
+    private BOOLEAN NOT NULL DEFAULT 0,
     notes TEXT,
     created_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime')),

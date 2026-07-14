@@ -35,6 +35,7 @@ class PgTaskQueryClient(TaskQueryClient):
                 .where(t.personal_tasks.c.tier.in_(tiers))
                 .where(t.personal_tasks.c.status.notin_(_OPEN_STATES))
                 .where(t.personal_tasks.c.deleted_at.is_(None))
+                .where(t.personal_tasks.c.private.is_(False))
                 .order_by(
                     func.coalesce(t.personal_tasks.c.tier, 99),
                     func.coalesce(t.personal_tasks.c.priority_rank, 999999),
@@ -53,12 +54,17 @@ class PgTaskQueryClient(TaskQueryClient):
         else:
             raise ValueError(f"Invalid task source: {source!r}")
 
+        stmt = (
+            select(tbl.c.id, tbl.c.title, tbl.c.status, tbl.c.deleted_at)
+            .where(tbl.c.id == task_id)
+            .where(tbl.c.owner_id == owner_id)
+        )
+        # Private personal tasks are invisible to goal-bot (ADR-0018): the
+        # answer is the same None as "doesn't exist", by design.
+        if tbl is t.personal_tasks:
+            stmt = stmt.where(tbl.c.private.is_(False))
         with self._engine.connect() as c:
-            row = c.execute(
-                select(tbl.c.id, tbl.c.title, tbl.c.status, tbl.c.deleted_at)
-                .where(tbl.c.id == task_id)
-                .where(tbl.c.owner_id == owner_id)
-            ).one_or_none()
+            row = c.execute(stmt).one_or_none()
         if row is None:
             return None
         return TaskStatus(

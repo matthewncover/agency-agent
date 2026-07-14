@@ -54,6 +54,14 @@ class TestGetPersonalCandidates:
         candidates = query_client.get_personal_candidates(person_id, tiers=(1,))
         assert [c.title for c in candidates] == ["T1"]
 
+    def test_excludes_private_tasks(self, task_repo, query_client, person_id):
+        task_repo.create_personal_task(PersonalTaskEntity(title="Public", tier=2))
+        task_repo.create_personal_task(
+            PersonalTaskEntity(title="Secret gift", tier=2, private=True)
+        )
+        candidates = query_client.get_personal_candidates(person_id)
+        assert [c.title for c in candidates] == ["Public"]
+
 
 class TestGetTaskStatus:
     def test_personal(self, task_repo, query_client, person_id):
@@ -89,6 +97,25 @@ class TestGetTaskStatus:
     def test_invalid_source_raises(self, query_client, person_id):
         with pytest.raises(ValueError):
             query_client.get_task_status("bogus", 1, person_id)
+
+    def test_private_returns_none(self, task_repo, query_client, person_id):
+        # Private is deliberately indistinguishable from missing (ADR-0018).
+        created = task_repo.create_personal_task(
+            PersonalTaskEntity(title="Secret gift", tier=2, private=True)
+        )
+        assert query_client.get_task_status("personal", created.id, person_id) is None
+
+    def test_privatized_after_creation_returns_none(
+        self, task_repo, query_client, person_id
+    ):
+        created = task_repo.create_personal_task(
+            PersonalTaskEntity(title="Was public", tier=2)
+        )
+        assert (
+            query_client.get_task_status("personal", created.id, person_id) is not None
+        )
+        task_repo.update_personal_task(created.id, {"private": True})
+        assert query_client.get_task_status("personal", created.id, person_id) is None
 
 
 class TestGetDailySignal:

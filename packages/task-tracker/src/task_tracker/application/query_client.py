@@ -38,16 +38,23 @@ class TaskQueryClient(ABC):
     def get_personal_candidates(
         self, owner_id: int, tiers: tuple[int, ...] = (2, 3)
     ) -> list[PersonalTaskEntity]:
-        """Open, non-deleted personal tasks in the given tiers, for goal-setting
-        candidate-gathering. `work_tasks` are never candidates (no work goals,
-        ADR-0005)."""
+        """Open, non-deleted, non-private personal tasks in the given tiers,
+        for goal-setting candidate-gathering. `work_tasks` are never candidates
+        (no work goals, ADR-0005); private tasks are never candidates
+        (ADR-0018)."""
 
     @abstractmethod
     def get_task_status(
         self, source: str, task_id: int, owner_id: int
     ) -> TaskStatus | None:
         """Status of one referenced task (`source` ∈ {'personal','work'}) owned
-        by `owner_id`, or None if it doesn't exist / isn't theirs."""
+        by `owner_id`, or None if it doesn't exist / isn't theirs / is private
+        (ADR-0018 — private is deliberately indistinguishable from missing).
+
+        None is a NO-SIGNAL answer: callers must treat it as "say nothing",
+        never as evidence the task was completed, dropped, or removed. A live
+        goal's ref can legitimately return None if its task was later marked
+        private."""
 
     @abstractmethod
     def get_daily_signal(self, owner_id: int, day: date) -> DailySignal | None:

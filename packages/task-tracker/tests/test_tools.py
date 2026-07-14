@@ -31,6 +31,25 @@ class TestCreateTaskTool:
         )
         assert result["id"] is not None
         assert result["tier"] == 2
+        assert result["private"] is False
+
+    def test_create_private_personal_task(self, tools_env):
+        result = tools_env.create_task(
+            type="personal",
+            title="Plan surprise",
+            tier=2,
+            private=True,
+        )
+        assert result["private"] is True
+
+    def test_update_task_toggles_private(self, tools_env):
+        created = tools_env.create_task(type="personal", title="Gift", tier=2)
+        updated = tools_env.update_task(id=created["id"], type="personal", private=True)
+        assert updated["private"] is True
+        updated = tools_env.update_task(
+            id=created["id"], type="personal", private=False
+        )
+        assert updated["private"] is False
 
     def test_create_with_deadline(self, tools_env):
         result = tools_env.create_task(

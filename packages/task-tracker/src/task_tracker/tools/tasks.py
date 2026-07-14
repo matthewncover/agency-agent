@@ -19,16 +19,27 @@ from task_tracker.application.use_cases import (
 )
 
 
-def register(mcp, repos):
+def register(mcp, repos, include: set[str] | None = None):
+    """Register task tools on `mcp`. `include=None` registers everything; a set
+    of tool names registers that subset (the shared surface's curated grant —
+    see create_shared_app). Returns only the registered tools."""
     task_repo = repos["task"]
     time_entry_repo = repos["time_entry"]
     sprint_repo = repos["sprint"]
     daily_log_repo = repos["daily_log"]
     system_meta_repo = repos["system_meta"]
 
+    def tool(description: str):
+        def deco(fn):
+            if include is None or fn.__name__ in include:
+                return mcp.tool(description=description)(fn)
+            return fn
+
+        return deco
+
     # --- Task CRUD ---
 
-    @mcp.tool(
+    @tool(
         description=(
             "Create a single work or personal task. Use when Matthew mentions a "
             "new task, ticket, or item to track. For multiple tasks at once "
@@ -51,6 +62,7 @@ def register(mcp, repos):
         commitment_notes: str | None = None,
         priority_rank: int | None = None,
         pinned: bool = False,
+        private: bool = False,
         notes: str | None = None,
     ) -> dict:
         """Create a single work or personal task.
@@ -71,6 +83,7 @@ def register(mcp, repos):
             commitment_notes: Context for commitments: who, when, what was promised
             priority_rank: Relative ordering. Scoped to commitment_level (work) or tier (personal). Rank 1 = highest within that scope.
             pinned: Personal Tier 3 only. Pinned items appear in the 'what this is all for' motivational section of the tracker.
+            private: Personal tasks only. Private tasks are invisible to goal-bot and to the shared task surface — use for anything that shouldn't surface outside this tracker (e.g. gifts, surprises).
             notes: Detailed context, history, or background. Not shown in list views.
         """
         fields = {"title": title, "status": status}
@@ -94,6 +107,8 @@ def register(mcp, repos):
                 fields["tier"] = tier
             if pinned:
                 fields["pinned"] = pinned
+            if private:
+                fields["private"] = private
             if is_commitment:
                 fields["is_commitment"] = is_commitment
             if commitment_notes:
@@ -112,7 +127,7 @@ def register(mcp, repos):
         task = uc.execute(type, **fields)
         return task.model_dump(mode="json")
 
-    @mcp.tool(
+    @tool(
         description=(
             "Batch create multiple tasks at once. Use when Matthew drops several "
             "items at once — brain dumps, sprint planning intake, or listing out "
@@ -135,7 +150,7 @@ def register(mcp, repos):
         results = uc.execute(processed)
         return [r.model_dump(mode="json") for r in results]
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get full detail for a single task including rich notes, history, and "
             "actual_hours (computed from time entries, work tasks only). Children "
@@ -157,7 +172,7 @@ def register(mcp, repos):
             return None
         return task.model_dump(mode="json")
 
-    @mcp.tool(
+    @tool(
         description=(
             "Update one or more fields on a single task. Use for field changes "
             "like reprioritizing, updating notes, changing status, setting "
@@ -184,6 +199,7 @@ def register(mcp, repos):
         commitment_notes: str | None = None,
         priority_rank: int | None = None,
         pinned: bool | None = None,
+        private: bool | None = None,
         notes: str | None = None,
     ) -> dict | None:
         """Update one or more fields on a single task.
@@ -206,6 +222,7 @@ def register(mcp, repos):
             commitment_notes: Context for commitments
             priority_rank: Relative ordering within scope
             pinned: Personal Tier 3 only
+            private: Personal tasks only. True hides the task from goal-bot and the shared task surface; False re-exposes it.
             notes: Detailed context
         """
         fields = {}
@@ -224,6 +241,7 @@ def register(mcp, repos):
             "commitment_notes": commitment_notes,
             "priority_rank": priority_rank,
             "pinned": pinned,
+            "private": private,
             "notes": notes,
         }
         for k, v in local_vars.items():
@@ -238,7 +256,7 @@ def register(mcp, repos):
             return None
         return task.model_dump(mode="json")
 
-    @mcp.tool(
+    @tool(
         description=(
             "Update multiple tasks in a single call. Use for EOD status sweeps "
             "(marking several tasks done/in_progress), sprint reassignments "
@@ -259,7 +277,7 @@ def register(mcp, repos):
         results = uc.execute(updates)
         return [r.model_dump(mode="json") if r else None for r in results]
 
-    @mcp.tool(
+    @tool(
         description=(
             "Mark a task as done. Sets status='done' and completed_at=now. Use "
             "when Matthew says a task is finished, done, completed, shipped, "
@@ -280,7 +298,7 @@ def register(mcp, repos):
             return None
         return task.model_dump(mode="json")
 
-    @mcp.tool(
+    @tool(
         description=(
             "Mark a task as explicitly dropped — decided not to do. Sets "
             "status='nuked', preserves all data. Use when Matthew decides to "
@@ -302,7 +320,7 @@ def register(mcp, repos):
             return None
         return task.model_dump(mode="json")
 
-    @mcp.tool(
+    @tool(
         description=(
             "Soft delete a task (sets deleted_at). Filtered out of ALL queries "
             "including sprint reviews. Use ONLY for confirmed mistakes or "
@@ -322,7 +340,7 @@ def register(mcp, repos):
         success = uc.execute(id, type)
         return {"deleted": success}
 
-    @mcp.tool(
+    @tool(
         description=(
             "Restore (undelete) a soft-deleted task by clearing its deleted_at. "
             "The reverse of delete_task — use when a task was deleted by mistake. "
@@ -346,7 +364,7 @@ def register(mcp, repos):
 
     # --- Task Queries ---
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get all open (non-done, non-nuked, non-deleted) tasks. Returns "
             "lightweight fields without rich notes. Use for ad-hoc queries like "
@@ -371,7 +389,7 @@ def register(mcp, repos):
         result = uc.execute(type, min_days_open)
         return {k: [t.model_dump(mode="json") for t in v] for k, v in result.items()}
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get all tasks for a sprint including done, nuked, waiting, and "
             "delegated — complete sprint picture. Excludes soft-deleted. Use for "
@@ -390,7 +408,7 @@ def register(mcp, repos):
         tasks = uc.execute(sprint_id)
         return [t.model_dump(mode="json") for t in tasks]
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get tasks that had status changes, time logged, or notes updated on "
             "a specific date. Returns flat list. Use as optional cross-check when "
@@ -408,7 +426,7 @@ def register(mcp, repos):
         result = uc.execute(date.fromisoformat(target_date))
         return {k: [t.model_dump(mode="json") for t in v] for k, v in result.items()}
 
-    @mcp.tool(
+    @tool(
         description=(
             "Keyword-search tasks by title and notes. Returns lightweight ranked "
             "candidates (id, title, tier, status, type) — title matches rank above "
@@ -438,7 +456,7 @@ def register(mcp, repos):
         uc = SearchTasksUseCase(task_repo)
         return uc.execute(query, include_done, include_deleted, limit)
 
-    @mcp.tool(
+    @tool(
         description=(
             "Compare estimated vs actual hours for completed work tasks. Returns "
             "per-task rows (title, estimate_hours, actual_hours, ratio where "
@@ -461,7 +479,7 @@ def register(mcp, repos):
 
     # --- Composite Queries ---
 
-    @mcp.tool(
+    @tool(
         description=(
             "Single call returning everything needed for daily tracker generation "
             "and morning kickoff. Returns: open work tasks with computed "
@@ -479,7 +497,7 @@ def register(mcp, repos):
         )
         return uc.execute()
 
-    return {
+    tools = {
         "create_task": create_task,
         "create_tasks": create_tasks,
         "get_task_detail": get_task_detail,
@@ -496,3 +514,6 @@ def register(mcp, repos):
         "get_estimation_accuracy": get_estimation_accuracy,
         "get_tracker_data": get_tracker_data,
     }
+    if include is not None:
+        tools = {name: fn for name, fn in tools.items() if name in include}
+    return tools

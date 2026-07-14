@@ -32,6 +32,7 @@ def row_to_personal_task(row: sqlite3.Row) -> PersonalTaskEntity:
     d = dict(row)
     d["is_commitment"] = bool(d.get("is_commitment", 0))
     d["pinned"] = bool(d.get("pinned", 0))
+    d["private"] = bool(d.get("private", 0))
     for field in ("created_at", "updated_at", "completed_at", "deleted_at"):
         if d.get(field) and isinstance(d[field], str):
             d[field] = datetime.fromisoformat(d[field])

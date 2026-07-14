@@ -92,6 +92,7 @@ personal_tasks = Table(
     Column("commitment_notes", Text),
     Column("priority_rank", Integer),
     Column("pinned", Boolean, nullable=False, server_default="false"),
+    Column("private", Boolean, nullable=False, server_default="false"),
     Column("notes", Text),
     Column(
         "created_at",

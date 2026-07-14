@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from agency_profile.application.ports import ProfileRepositoryPort
 from agency_profile.domain.entities import ProfileKind
+from task_tracker.application.query_client import TaskQueryClient
 
 from goal_bot.application.ports import (
     GoalRepositoryPort,
@@ -44,6 +45,9 @@ class GoalUseCases:
     # Optional — enables shared (group-goal) completion propagation (B7). When
     # absent, log_outcome behaves single-user (no fan-out side effect).
     profiles: ProfileRepositoryPort | None = None
+    # Optional — enables task_ref validation on version creation (ADR-0018).
+    # When absent, refs are stored unvalidated (single-package test setups).
+    tasks: TaskQueryClient | None = None
 
     # --- authoring ---
 
@@ -60,7 +64,9 @@ class GoalUseCases:
         ).id
 
     def create_goal_version(self, **kw) -> int:
-        return self.goals.create_goal_version(GoalVersion(**kw)).id
+        version = GoalVersion(**kw)
+        self._validate_task_ref(version)
+        return self.goals.create_goal_version(version).id
 
     def create_goals(self, owner: int, goals: list[dict]) -> list[dict]:
         """Batch-create new goals, each with its versions + obstacles, atomically.
@@ -73,6 +79,8 @@ class GoalUseCases:
                 chapter_id=g.get("chapter_id"),
             )
             versions = [GoalVersion(goal_id=None, **v) for v in g["versions"]]
+            for v in versions:
+                self._validate_task_ref(v, owner=owner)
             specs.append((goal, versions))
         saved = self.goals.create_goals_with_versions(specs)
         return [
@@ -91,7 +99,37 @@ class GoalUseCases:
         """Batch-add versions to existing goals atomically. Each dict carries a
         goal_id (re-ingest bar changes)."""
         objs = [GoalVersion(**v) for v in versions]
+        for v in objs:
+            self._validate_task_ref(v)
         return [v.id for v in self.goals.create_goal_versions(objs)]
+
+    def _validate_task_ref(
+        self, version: GoalVersion, owner: int | None = None
+    ) -> None:
+        """Reject a task_ref that doesn't resolve for the goal's owner. Because
+        get_task_status answers None for private tasks (ADR-0018), this also
+        blocks new refs to private tasks — indistinguishable from nonexistent
+        ones by design. No-op when no task client is wired."""
+        if version.task_ref_source is None and version.task_ref_id is None:
+            return
+        if version.task_ref_source is None or version.task_ref_id is None:
+            raise ValueError("task_ref requires both task_ref_source and task_ref_id")
+        if self.tasks is None:
+            return
+        if owner is None:
+            detail = self.goals.get_goal_detail(version.goal_id)
+            if detail is None:
+                raise ValueError(f"no goal {version.goal_id}")
+            owner = detail[0].owner_profile_id
+        status = self.tasks.get_task_status(
+            str(version.task_ref_source), version.task_ref_id, owner
+        )
+        if status is None:
+            raise ValueError(
+                f"task_ref ({version.task_ref_source}, {version.task_ref_id}) "
+                f"does not resolve for owner {owner} — the task doesn't exist, "
+                "belongs to someone else, or is private"
+            )
 
     def update_goal(self, goal_id: int, fields: dict) -> dict:
         bad = set(fields) - _GOAL_IDENTITY_FIELDS

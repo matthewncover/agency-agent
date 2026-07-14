@@ -85,6 +85,7 @@ class PersonalTaskEntity(BaseModel):
     commitment_notes: str | None = None
     priority_rank: int | None = None
     pinned: bool = False
+    private: bool = False
     notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

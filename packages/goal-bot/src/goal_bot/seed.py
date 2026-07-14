@@ -5,6 +5,8 @@ from agency_profile.infrastructure.adapters.profile_repo import (
     SqlAlchemyProfileRepository,
 )
 from sqlalchemy import Engine
+from task_tracker.domain.entities import PersonalTaskEntity
+from task_tracker.infrastructure.adapters import PgTaskRepositoryAdapter
 
 from goal_bot.server import build_use_cases
 
@@ -71,34 +73,45 @@ _WORKOUT_OBS = [
 ]
 _ERRAND_OBS = ['"I\'m busy today with { bs }" - you can make small moves today']
 
-# The eight oneoff/binary errands: (title, personal task_ref_id, extra obstacles).
+# The eight oneoff/binary errands: (title, extra obstacles). Each is promoted
+# from a personal task; seed_demo creates the backing tasks itself and wires
+# the generated ids, because task_refs must now resolve at creation time
+# (ADR-0018) and the real tracker's ids don't exist in a fresh toy DB.
 _ERRANDS = [
     (
         "Renew passport",
-        3,
         [
             "\"I'm not going to Slovenia so no rush on my passport\" - dawg, you don't "
             "know when you might need it",
         ],
     ),
-    ("Re-register TSA precheck", 4, []),
+    ("Re-register TSA precheck", []),
     (
         "Register Bronco in CA",
-        1,
         [
             '"I can get away with Arizona plates in CA" - '
             "until you dont get away with it?",
         ],
     ),
-    ("Cancel boxing membership", 71, []),
-    ("Get money from Brian Lee", 50, []),
-    ("Capital One statements audit", 72, []),
-    ("Flight expensing", 62, []),
-    ("Cancel Slovenia plans", 5, []),
+    ("Cancel boxing membership", []),
+    ("Get money from Brian Lee", []),
+    ("Capital One statements audit", []),
+    ("Flight expensing", []),
+    ("Cancel Slovenia plans", []),
 ]
 
 
-def _real_chapter_goals(ch: int) -> list[dict]:
+def _seed_errand_tasks(engine: Engine, owner_id: int) -> dict[str, int]:
+    """Create the tier-2 personal tasks the errand goals are promoted from,
+    returning title → generated task id for the goals' task_refs."""
+    repo = PgTaskRepositoryAdapter(engine, owner_id)
+    return {
+        title: repo.create_personal_task(PersonalTaskEntity(title=title, tier=2)).id
+        for title, _ in _ERRANDS
+    }
+
+
+def _real_chapter_goals(ch: int, errand_task_ids: dict[str, int]) -> list[dict]:
     """The 11 goals from the real first chapter, as create_goals specs."""
     goals: list[dict] = [
         {
@@ -186,7 +199,7 @@ def _real_chapter_goals(ch: int) -> list[dict]:
             ],
         },
     ]
-    for title, ref_id, extra_obs in _ERRANDS:
+    for title, extra_obs in _ERRANDS:
         goals.append(
             {
                 "title": title,
@@ -200,7 +213,7 @@ def _real_chapter_goals(ch: int) -> list[dict]:
                         "recurrence_config": {},
                         "completion_type": "binary",
                         "task_ref_source": "personal",
-                        "task_ref_id": ref_id,
+                        "task_ref_id": errand_task_ids[title],
                         "obstacles": _ERRAND_OBS + extra_obs,
                     }
                 ],
@@ -273,7 +286,10 @@ def seed_demo(
         None,
     )
 
-    created = uc.create_goals(pid, _real_chapter_goals(ch) + _coverage_goals(ch))
+    errand_task_ids = _seed_errand_tasks(engine, pid)
+    created = uc.create_goals(
+        pid, _real_chapter_goals(ch, errand_task_ids) + _coverage_goals(ch)
+    )
 
     # Rotation group (ADR-0016): pushups and pull-ups share one alternating
     # rhythm (push → rest → pull → rest); the group owns the cadence, the two

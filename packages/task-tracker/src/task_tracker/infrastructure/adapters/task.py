@@ -50,8 +50,8 @@ class SqliteTaskRepositoryAdapter(TaskRepositoryPort):
         cur = conn.execute(
             """INSERT INTO personal_tasks
             (title, tier, status, blocked_reason, deadline, parent_task_id,
-             is_commitment, commitment_notes, priority_rank, pinned, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             is_commitment, commitment_notes, priority_rank, pinned, private, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 task.title,
                 task.tier,
@@ -63,6 +63,7 @@ class SqliteTaskRepositoryAdapter(TaskRepositoryPort):
                 task.commitment_notes,
                 task.priority_rank,
                 int(task.pinned),
+                int(task.private),
                 task.notes,
             ),
         )
