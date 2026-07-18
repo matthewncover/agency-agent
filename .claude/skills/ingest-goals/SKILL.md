@@ -29,8 +29,28 @@ run**, don't work from memory:
 ## Inputs
 
 - **Source markdown path** (the Obsidian file). Ask the user if not provided.
-- **Owner** = a person profile id. Default **1** (Matthew, the only person).
-  Confirm only if ambiguous. Every tool takes this as `owner`.
+  Claude cannot read `~/Documents` (macOS TCC) — if the path is in the vault,
+  have the user copy it somewhere readable and paste the gid-marked copy back.
+- **Owner** = a person profile id. Default **1** (Matthew). Confirm only if
+  ambiguous. Every tool takes this as `owner`.
+
+## Step 0 — verify the database target (ALWAYS, before anything else)
+
+MCP servers read `.env` **only at launch**; the file and the running server
+drift silently. Never assume — verify, show the user, get a nod:
+
+1. State which DB `.env`'s `DATABASE_URL` points at (dev, or prod via the
+   `localhost:5433` ssh tunnel). If it was just changed, the user must `/mcp`
+   → reconnect **both** `goal-bot-ingestion` and `task-tracker` (they resolve
+   `.env` independently — a mismatch between them writes goals and tasks to
+   different databases).
+2. Prove it with data: `get_active_chapter(owner, today)` and a known-task
+   probe (`search_tasks` for something that exists only in the intended DB).
+   State the evidence ("no chapter → fresh prod") before the first write.
+3. **Prod sessions**: confirm the ssh tunnel is up first; at session end,
+   remind the user to revert `.env` to dev and reconnect again — anything that
+   reads `.env` (pytest's live fixture, `just seed`, `just toy-reset`) hits
+   real data while it points at prod.
 
 ## Tools (the `goal-bot-ingestion` MCP grant)
 
@@ -97,6 +117,12 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
 2. **Parse** per goal-markdown §3 (ownership, levels, explode buckets, splits,
    cadence). `why` is required; reject a goal without one. This is your job —
    the loose-markdown → structured-record step.
+   **Then lint before anything interactive** — one consolidated gap report, not
+   gaps discovered mid-flow: every goal missing a `why` (including want-only
+   goals and `why: see below`-style dangling references), file header dates vs
+   what the user has said about the window, items that look dead/already
+   decided, unlabeled levels about to default to `need`, owners that don't
+   exist yet (provisioning needed). Get all answers in one round-trip.
 3. **Classify the run by the file's date header** vs `get_active_chapter(owner,
    today)` — and let the tools resolve identity, don't diff by hand:
    - **Header is a new window** → **rollover.** Call `rollover(owner, start,
@@ -142,8 +168,15 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
    re-create it against the new `gid`s, preserving the sequence order.
 7. **Write `gid`s back into the source file** — Edit the markdown directly,
    appending `<!--gid:N-->` to each goal heading (one per goal; each exploded
-   one-off gets its own). This is the Claude Code advantage over the old
-   copy-paste flow — the file is the source of truth for re-ingest.
+   one-off gets its own). A **split goal** (one authored block → N goals, e.g.
+   pushups/pull-ups) gets all its gids on the shared heading, labeled:
+   `<!--gid:9 pushups--> <!--gid:10 pull-ups-->`. If a rotation group was
+   created from phrasing (no authored `rotate:` line), write the `rotate:` line
+   into the section too, so the file round-trips. Items deliberately NOT
+   ingested get no gid — tell the user to delete them from the source, or the
+   next re-ingest re-surfaces them as new candidates. This is the Claude Code
+   advantage over the old copy-paste flow — the file is the source of truth
+   for re-ingest.
 8. **Return the change summary** — build it straight from `diff_chapter`'s
    output (`NEW / VERSION-BUMP / UNCHANGED / ARCHIVED`, plus any `ambiguous`
    the human resolved), with inferred fields shown inline. Don't re-classify.
@@ -167,9 +200,19 @@ Two cases:
    create the goal referencing it. New one-offs should exist as **both**.
 
 Matching md items to tasks is judgment — surface uncertain matches in the confirm
-queue, don't guess. `propose_candidates(owner)` returns the owner's open tier-2/3
-personal tasks (work excluded) — use it to find promotion candidates rather than
-free-form searching.
+queue, don't guess. Two different jobs, two different sources:
+
+- **Goal-setting proposals** → `propose_candidates(owner)` (open tier-2/3 only,
+  by design).
+- **Link-target matching** (does this one-off already have a task?) → the
+  candidates list is NOT enough: tier-1 and done/nuked tasks are hidden from it,
+  and they're often exactly the matches (a one-off may already be complete).
+  While the personal-task corpus is small (≲ a few hundred), pull the full list
+  once (`search_tasks` with `include_done=true` on broad probes, or a direct
+  listing) and match by reading it — keyword-guessing misses synonyms
+  ("bronco" vs "Vehicle registration transfer"). If the corpus outgrows one
+  read, fall back to multiple synonym searches per item, always with
+  `include_done=true`, and say which items you could not confidently match.
 
 **Ownership invariant:** a goal owned by P may only reference a task owned by P.
 Task-tracker is now owner-scoped (B1): `propose_candidates` and the task client

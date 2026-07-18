@@ -193,10 +193,10 @@ class PgTaskRepositoryAdapter(TaskRepositoryPort):
         )
         with self._engine.connect() as c:
             for task_type, tbl, tier_expr in specs:
-                title_rank = case((tbl.c.title.like(like), 0), else_=1)
+                title_rank = case((tbl.c.title.ilike(like), 0), else_=1)
                 conds = [
                     tbl.c.owner_id == self._owner_id,
-                    or_(tbl.c.title.like(like), tbl.c.notes.like(like)),
+                    or_(tbl.c.title.ilike(like), tbl.c.notes.ilike(like)),
                     *self._privacy(tbl),
                 ]
                 if not include_done:

@@ -294,3 +294,16 @@ class TestSqliteSystemMetaRepositoryAdapter:
         system_meta_repo.set("last_tier3_review", "2026-03-01")
         fetched = system_meta_repo.get("last_tier3_review")
         assert fetched.value == "2026-03-01"
+
+
+def test_search_tasks_is_case_insensitive(task_repo):
+    # Regression: the PG adapter used LIKE (case-sensitive), silently diverging
+    # from SQLite's case-insensitive LIKE — "vehicle" missed "Vehicle ...".
+    task_repo.create_personal_task(
+        PersonalTaskEntity(title="Vehicle Registration Transfer", tier=1)
+    )
+    for query in ("vehicle", "VEHICLE", "Vehicle registration"):
+        results = task_repo.search_tasks(query)
+        assert any(r["title"] == "Vehicle Registration Transfer" for r in results), (
+            f"query {query!r} failed to match"
+        )

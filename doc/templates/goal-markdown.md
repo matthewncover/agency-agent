@@ -211,6 +211,7 @@ rotate: [pushups, rest, pull-ups, rest]
   ```
   Invisible in Obsidian preview. Paste it back so IDs persist. One `gid` per goal; exploded one-offs each get their own.
 - Re-ingest: **has `gid`** → resolve + diff against current record. **No `gid`** → candidate new goal (ID assigned + written back) unless the duplicate check fires (§5.3).
+- **Split goals** (one authored block → N goals, §3.5): all gids ride the shared heading, labeled — `- Pushups and pullups <!--gid:9 pushups--> <!--gid:10 pull-ups-->` — until/unless the author restructures into separate blocks. *(Convention set at first prod ingest, 2026-07-18.)*
 ### 5.2 New version vs. new goal (surfaced, never guessed)
 - **Bar number change is always a new version, same ID** — 7k→8k is tracked evolution, no prompt. Old `daily_plan_item`s stay pinned to the old version (OQ-14); raising a bar never retroactively fails a past day.
 - **Large content change** (title + definition + recurrence all shifted, or meaning clearly moved) → confirm "version-bump or new goal?" Default to version-bump; never silently fork identity.

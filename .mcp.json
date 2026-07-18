@@ -3,6 +3,10 @@
     "goal-bot-ingestion": {
       "command": "uv",
       "args": ["run", "goal-bot-ingest"]
+    },
+    "task-tracker": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "task_tracker"]
     }
   }
 }
