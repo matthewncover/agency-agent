@@ -313,6 +313,10 @@ def assemble_morning_context(
         group_owner_ids or [], plan_date, goals
     )
 
+    # 8. Chapter preamble — the person's authored seasonal framing (theme /
+    #    focus / parked domains). Same trust level as Tier-1: human-written.
+    active_chapter = goals.get_active_chapter(person_id, plan_date)
+
     return MorningContext(
         person_id=person_id,
         plan_date=plan_date,
@@ -326,6 +330,8 @@ def assemble_morning_context(
         reassessment=reassessment,
         hypotheses=list(hypotheses or []),
         framing_excerpt=framing_excerpt,
+        chapter_label=active_chapter.label if active_chapter else None,
+        chapter_preamble=active_chapter.preamble if active_chapter else None,
         group_block=group_block,
         shared_notices=shared_notices,
     )

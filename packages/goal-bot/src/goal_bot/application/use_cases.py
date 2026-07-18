@@ -52,10 +52,21 @@ class GoalUseCases:
     # --- authoring ---
 
     def create_chapter(
-        self, owner: int, start: date, end: date, label: str | None
+        self,
+        owner: int,
+        start: date,
+        end: date,
+        label: str | None,
+        preamble: str | None = None,
     ) -> int:
         return self.goals.create_chapter(
-            Chapter(owner_profile_id=owner, start_date=start, end_date=end, label=label)
+            Chapter(
+                owner_profile_id=owner,
+                start_date=start,
+                end_date=end,
+                label=label,
+                preamble=preamble,
+            )
         ).id
 
     def create_goal(self, owner: int, title: str, chapter_id: int | None) -> int:

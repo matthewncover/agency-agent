@@ -1,7 +1,8 @@
 # Goal-Markdown — Authoring Template & Ingestion Contract
  
-> **Doc:** `doc/templates/goal-markdown.md` · **v0.6** · status: Phase-2 (chat T) output
+> **Doc:** `doc/templates/goal-markdown.md` · **v0.7** · status: Phase-2 (chat T) output
 > **Role:** Defines (a) the markdown you write goals in (Obsidian), and (b) the contract the *separate* ingestion chat follows to turn that markdown into structured DB records per spec §6. Ingestion runs in its own Claude chat, **not** the Telegram bot. This doc does not build the runtime.
+> **v0.6 → v0.7:** **chapter preamble + per-owner docs** (migration 0006). Optional free-prose preamble under the window header — theme, this-season focus, deliberately-parked domains — stored verbatim on `chapter.preamble` and injected into the morning prompt (parked domains are chosen priorities; the bot never nudges toward them). Because chapters are per-profile (windows, themes, and parked lists differ per person), **one doc per owner** (yours, hers, the couple's) is now the recommended layout; the `### Name` ownership headings are unchanged, so a combined doc still ingests.
 > **v0.5 → v0.6:** **rotation groups** (ADR-0016): goals sharing one alternating rhythm (pushups / pull-ups) stay separate goals and get a `rotate:` line naming the shared sequence (§2.0, §3.5). The §3.5 "two independent 4-day clocks" artifact is retired — local testing showed the drift is not acceptable (both surfaced the same day).
 > **v0.4 → v0.5:** unlabeled one-offs default to **`level=need`** (§2.0, §3.3, §4) — a bare one-off is a committed floor, not a stretch; an explicit `need:`/`want:` label still wins.
 > **v0.3 → v0.4:** pushups resolved (`quantity` ⇒ split into two goals). `accumulation` added to the recurrence enum (4h painting). **Goals are chapter-scoped** — rollover creates fresh goals in the new chapter (§5.6); cross-chapter lineage deferred. Tag starter-set + lightweight stance recorded. Group-profile model for shared goals noted as an architecture decision (dissolves OQ-16).
@@ -38,6 +39,12 @@
  
 ```markdown
 6/15 - 7/20            ← chapter window (file header). Optional theme: `6/15 - 7/20 — "Reset"`
+ 
+<optional chapter preamble — free prose before the first `###` heading:
+this season's focus, what quietly outranks what, and what's deliberately
+parked. Stored verbatim on the chapter; the bot treats parked domains as
+chosen, never as slippage. One doc per owner — windows and preambles are
+per-person (the couple doc carries the shared chapter's own preamble).>
  
 ### Matthew
  
@@ -192,6 +199,7 @@ rotate: [pushups, rest, pull-ups, rest]
 | `anticipated_obstacle.text` | `obstacles:` bullets | **T (optional)** | One verbatim row per bullet; written to all active versions; no coping parsing. |
 | `tag` / `goal_tag` | proposed from text + vocab | **C** | Always confirm — silent tagging drifts vocabulary; batched into one approval. |
 | `chapter.label` (theme) | optional after date header | **T (optional)** | |
+| `chapter.preamble` | free prose before the first `###` heading | **T (optional)** | Stored verbatim (§2.1). Theme/focus/parked domains; parked is chosen, never slippage — the bot must not nudge toward it. |
 | `chapter.start/end_date` | file date header | **I** | |
  
 **Net typed surface:** title + one or two bars + why. Obstacles optional. Everything else is off your hands.

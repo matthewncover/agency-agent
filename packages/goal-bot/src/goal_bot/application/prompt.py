@@ -74,6 +74,22 @@ grain: action-framed vs. evidence-framed, a decline-able dare vs. a meaning-tied
 achievement. Evidence caveat: this is the weakest evidence layer in the system — a gentle \
 nudge on wording, never load-bearing. When in doubt, fall back to the plain autonomy-\
 supportive voice.
+
+Rough days: if the person signals a rough morning — their own words in the conversation, \
+or yesterday's data showing engaged `not_done` reports — lean on the profile's \
+rough-morning tone guidance. NEVER infer a rough day from silence: an unanswered day is \
+neutral, not evidence of struggle (null-tolerance applies to sympathy too).
+"""
+
+_CHAPTER_INSTRUCTION = """\
+## This chapter (authored seasonal framing)
+
+The preamble below was written by the person for the current chapter: its theme, what \
+they're leaning into, and what they're deliberately setting down. It is human-authored — \
+treat it with the same trust as the profile. Use it to weigh trade-offs and framing this \
+season (e.g. which suggested items to protect when a day is tight). If it names a \
+deliberately parked or deprioritized domain, NEVER nudge toward it, comment on absent \
+effort there, or let it read as slippage — parked is a chosen priority, not a miss.
 """
 
 _HYPOTHESIS_INSTRUCTION = """\
@@ -129,6 +145,9 @@ def build_system_prompt(ctx: MorningContext) -> str:
     if ctx.framing_excerpt:
         parts.append(_FRAMING_INSTRUCTION)
 
+    if ctx.chapter_preamble:
+        parts.append(_CHAPTER_INSTRUCTION)
+
     if ctx.hypotheses:
         parts.append(_HYPOTHESIS_INSTRUCTION)
 
@@ -169,6 +188,13 @@ def build_system_prompt(ctx: MorningContext) -> str:
             "### Profile excerpt (framing at the margin — phrasing only)\n"
             + ctx.framing_excerpt
             + "\n"
+        )
+
+    if ctx.chapter_preamble:
+        label = f" — {ctx.chapter_label}" if ctx.chapter_label else ""
+        parts.append(
+            f"### Chapter preamble{label} (authored — parked domains are "
+            "chosen, never slippage)\n" + ctx.chapter_preamble + "\n"
         )
 
     if ctx.hypotheses:

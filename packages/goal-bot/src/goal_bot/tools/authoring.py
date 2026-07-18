@@ -8,10 +8,16 @@ from goal_bot.application.use_cases import GoalUseCases
 def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
     @mcp.tool
     def create_chapter(
-        owner: int, start: date, end: date, label: str | None = None
+        owner: int,
+        start: date,
+        end: date,
+        label: str | None = None,
+        preamble: str | None = None,
     ) -> int:
-        """Create a new chapter and return its id."""
-        return uc.create_chapter(owner, start, end, label)
+        """Create a new chapter and return its id. `preamble` is the authored
+        per-chapter framing (theme / focus / deliberately-parked domains) from
+        the goal markdown, stored verbatim (goal-markdown §2.3)."""
+        return uc.create_chapter(owner, start, end, label, preamble)
 
     @mcp.tool
     def create_goal(owner: int, title: str, chapter_id: int | None = None) -> int:

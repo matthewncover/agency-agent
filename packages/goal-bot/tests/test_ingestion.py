@@ -255,3 +255,18 @@ def test_group_goal_in_private_chapter_flags_confirm(migrated_engine, uc, iuc):
         iuc.check_goal_scope(person.profile_id, shared_chapter)["confirm_required"]
         is False
     )
+
+
+@pytest.mark.integration
+def test_rollover_carries_preamble_onto_new_chapter(uc, iuc, person_id):
+    uc.create_chapter(person_id, *C1, "Spring")
+    result = iuc.rollover(
+        person_id,
+        *C2,
+        carried=[],
+        label="Summer",
+        preamble="strength focus; painting parked",
+    )
+    ch = uc.get_active_chapter(person_id, C2[0])
+    assert ch["id"] == result["chapter_id"]
+    assert ch["preamble"] == "strength focus; painting parked"

@@ -56,3 +56,29 @@ def test_prompt_no_thin_day_section_when_not_thin():
     lower = build_system_prompt(_ctx(thin_day=False, wins=[win])).lower()
     # The thin-day *section* (added only when thin_day=True) begins with this phrase
     assert "nothing to surface from wins today" not in lower
+
+
+def test_prompt_chapter_preamble_injected_with_parked_guardrail():
+    ctx = _ctx().model_copy(
+        update={
+            "chapter_label": "Reset",
+            "chapter_preamble": "Leaning into strength; guitar is parked.",
+        }
+    )
+    out = build_system_prompt(ctx)
+    assert "Leaning into strength; guitar is parked." in out
+    assert "Reset" in out
+    lower = out.lower()
+    # The instruction must forbid nudging/guilting toward parked domains.
+    assert "parked" in lower and "never nudge" in lower
+
+
+def test_prompt_no_chapter_section_when_absent():
+    assert "Chapter preamble" not in build_system_prompt(_ctx())
+
+
+def test_prompt_rough_day_guidance_never_reads_silence():
+    ctx = _ctx().model_copy(update={"framing_excerpt": "tone: direct, no coddling"})
+    lower = build_system_prompt(ctx).lower()
+    assert "rough" in lower
+    assert "never infer a rough day from silence" in lower

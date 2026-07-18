@@ -86,6 +86,11 @@ class MorningContext(BaseModel):
     # Tier-1 profile_doc excerpt — nudges *phrasing only* at the margin (§7a),
     # never branched behavior. Weakest evidence layer; a light touch (B5).
     framing_excerpt: str | None = None
+    # Authored per-chapter framing (goal-markdown §2.3): theme / focus /
+    # deliberately-parked domains, verbatim from the chapter preamble. Human-
+    # written → same trust as Tier-1. Parked domains must never be guilted.
+    chapter_label: str | None = None
+    chapter_preamble: str | None = None
     # Group-owned (shared) goals fanned out as a SEPARATE block (behavior-spec
     # §6, ADR-0012) — never interleaved with the individual plan. Either member
     # completing marks it done for both. Carries NO partner reference — the

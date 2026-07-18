@@ -31,6 +31,7 @@ def _chapter(row) -> Chapter:
         id=row.id,
         owner_profile_id=row.owner_profile_id,
         label=row.label,
+        preamble=row.preamble,
         start_date=row.start_date,
         end_date=row.end_date,
     )
@@ -149,6 +150,7 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 .values(
                     owner_profile_id=chapter.owner_profile_id,
                     label=chapter.label,
+                    preamble=chapter.preamble,
                     start_date=chapter.start_date,
                     end_date=chapter.end_date,
                 )

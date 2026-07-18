@@ -48,6 +48,9 @@ class Chapter(BaseModel):
     id: int | None = None
     owner_profile_id: int
     label: str | None = None
+    # Authored per-chapter framing: theme / focus / deliberately-parked domains.
+    # Human-written in the goal markdown, stored verbatim (goal-markdown §2.3).
+    preamble: str | None = None
     start_date: date
     end_date: date
 

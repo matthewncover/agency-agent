@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 from goal_bot.application.ritual_assembly import assemble_morning_context
 from goal_bot.domain.entities import (
+    Chapter,
     CompletionType,
     DailyPlanItem,
     Goal,
@@ -205,3 +206,26 @@ def test_version_pinning_prefers_need(migrated_engine, goal_repo, person_id):
     pinned = next(c for c in ctx.full_list if c.goal_id == g.id)
     assert pinned.goal_version_id == v_need.id
     assert pinned.level == "need"
+
+
+@pytest.mark.integration
+def test_chapter_preamble_flows_into_context(migrated_engine, goal_repo, person_id):
+    goal_repo.create_chapter(
+        Chapter(
+            owner_profile_id=person_id,
+            label="Reset",
+            preamble="strength focus; guitar parked this season",
+            start_date=TODAY - timedelta(days=5),
+            end_date=TODAY + timedelta(days=25),
+        )
+    )
+    ctx = _assemble(migrated_engine, person_id)
+    assert ctx.chapter_label == "Reset"
+    assert ctx.chapter_preamble == "strength focus; guitar parked this season"
+
+
+@pytest.mark.integration
+def test_no_active_chapter_means_no_preamble(migrated_engine, person_id):
+    ctx = _assemble(migrated_engine, person_id)
+    assert ctx.chapter_label is None
+    assert ctx.chapter_preamble is None

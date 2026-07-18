@@ -79,10 +79,15 @@ input, act on what they return.
   classification per goal: `new` / `version_bump` / `unchanged` / `ambiguous`
   (version-vs-new-goal, `default: version_bump`) / `unknown_gid`, plus
   `archived` for any recorded goal that vanished from the markdown (§5.4).
-- `rollover(owner, start, end, carried, label?)` — opens the new chapter, mints
-  `carried` (`[{title, versions:[...]}]`) as **fresh** goals scoped to it, and
-  archives the prior chapter's goals. No cross-chapter lineage (ADR-0013).
-  Returns `{chapter_id, new_goal_ids, archived_goal_ids}`.
+- `rollover(owner, start, end, carried, label?, preamble?)` — opens the new
+  chapter, mints `carried` (`[{title, versions:[...]}]`) as **fresh** goals
+  scoped to it, and archives the prior chapter's goals. No cross-chapter
+  lineage (ADR-0013). Returns `{chapter_id, new_goal_ids, archived_goal_ids}`.
+- **Chapter preamble** (goal-markdown §2.1, v0.7): free prose between the date
+  header and the first `###` heading — theme / focus / parked domains. Pass it
+  verbatim as `preamble` to `create_chapter` or `rollover`; never paraphrase
+  it, never drop it silently. Docs are one-per-owner; a combined doc still
+  ingests via the ownership headings.
 - `check_goal_scope(goal_owner_id, chapter_id)` → `{confirm_required, reason}`.
   Call before writing a goal into a chapter (see the confirm queue).
 

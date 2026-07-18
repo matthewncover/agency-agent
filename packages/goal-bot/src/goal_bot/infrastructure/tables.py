@@ -27,6 +27,7 @@ chapter = Table(
         nullable=False,
     ),
     Column("label", Text),
+    Column("preamble", Text),
     Column("start_date", Date, nullable=False),
     Column("end_date", Date, nullable=False),
 )

@@ -165,6 +165,7 @@ class IngestionUseCases:
         end: date,
         carried: list[dict],
         label: str | None = None,
+        preamble: str | None = None,
     ) -> dict:
         """Open a new chapter window and carry goals forward as FRESH goals
         scoped to it; close (archive) the prior chapter's goals. No cross-chapter
@@ -175,7 +176,7 @@ class IngestionUseCases:
         prior = self.goals.get_active_chapter(owner, start - timedelta(days=1))
         archived = self.goals.archive_chapter_goals(prior.id) if prior else []
         new_chapter_id = self.goals.create_chapter(
-            _chapter(owner, start, end, label)
+            _chapter(owner, start, end, label, preamble)
         ).id
         specs = [dict(g, chapter_id=new_chapter_id) for g in carried]
         new_goals = self._create_carried(owner, specs)
@@ -223,7 +224,19 @@ class IngestionUseCases:
         }
 
 
-def _chapter(owner: int, start: date, end: date, label: str | None):
+def _chapter(
+    owner: int,
+    start: date,
+    end: date,
+    label: str | None,
+    preamble: str | None = None,
+):
     from goal_bot.domain.entities import Chapter
 
-    return Chapter(owner_profile_id=owner, start_date=start, end_date=end, label=label)
+    return Chapter(
+        owner_profile_id=owner,
+        start_date=start,
+        end_date=end,
+        label=label,
+        preamble=preamble,
+    )
