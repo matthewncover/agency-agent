@@ -183,8 +183,11 @@ def test_oneoff_goal_gets_oneoff_offer_set(uc, migrated_engine, person_id):
     gid, vid = _make_goal(
         uc, person_id, "Renew passport", recurrence=RecurrenceType.ONEOFF
     )
+    # engaged misses land on yesterday's plan: a chronically missed one-off
+    # stays in the carry chain, which is what keeps it surfacing (and thus
+    # reassessment-eligible) now that no-target one-offs aren't auto-due.
     for _ in range(_REASSESS_THRESHOLD):
-        uc.log_outcome(_add_item(uc, person_id, gid, vid).id, "not_done")
+        uc.log_outcome(_add_item(uc, person_id, gid, vid, on=YESTERDAY).id, "not_done")
 
     nudge = _assemble(migrated_engine, person_id).reassessment
     assert nudge is not None

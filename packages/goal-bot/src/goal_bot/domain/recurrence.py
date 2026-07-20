@@ -25,6 +25,12 @@ date-aware walk. A goal referenced by an active group is excluded from the
 per-goal classification below; see the rotation-group section of this module.
 - **quota** — `{"per_window": N, "window": "week", "week_start": "monday"?}`.
   N sessions per rolling window; budgeted against days left in the window.
+  `count` is accepted as a legacy alias for `per_window` (the first prod
+  ingestion wrote it, 2026-07); read via `quota_per_window`, author `per_window`.
+- **oneoff** — `{"target": "YYYY-MM-DD"?}`. Surfaces only when the target date
+  is near (within ONEOFF_NEAR_DAYS) or overdue (spec §3 bucket 3, OQ-10). No
+  target → never auto-surfaces: reachable via the full list on request, and a
+  carried-over one-off still surfaces via the assembler's carry-over rule.
 - **fixed_schedule** — `{"weekdays": [0..6]}` (Mon=0) **or** `{"month_days": [1..31]}`.
   Surfaces only on its named days.
 - **accumulation** — `{"unit": str?, "window": "chapter"}`; the target is the
@@ -261,6 +267,30 @@ def quota_status(
     if remaining_sessions >= remaining_days:
         return QuotaStatus.FORCED
     return QuotaStatus.SLACK
+
+
+def quota_per_window(config: dict) -> int:
+    """Sessions required per window. Canonical key `per_window`; `count` is a
+    legacy alias (see the module contract)."""
+    return config.get("per_window", config.get("count", 1))
+
+
+# --- oneoff ----------------------------------------------------------------
+
+# "Near" horizon for a one-off's target date (spec §3 bucket 3): it enters the
+# candidate subset this many days before target, and stays while overdue.
+ONEOFF_NEAR_DAYS = 7
+
+
+def oneoff_is_due(config: dict, today: date, near_days: int = ONEOFF_NEAR_DAYS) -> bool:
+    """A one-off auto-surfaces only when its target date is near or overdue.
+    No target → False: it stays reachable via the full list, and a carried-over
+    one-off surfaces through the assembler's carry-over rule regardless."""
+    target = config.get("target")
+    if not target:
+        return False
+    t = target if isinstance(target, date) else date.fromisoformat(str(target))
+    return today >= t - timedelta(days=near_days)
 
 
 # --- fixed_schedule --------------------------------------------------------

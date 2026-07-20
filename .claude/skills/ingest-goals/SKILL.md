@@ -88,6 +88,13 @@ input, act on what they return.
   verbatim as `preamble` to `create_chapter` or `rollover`; never paraphrase
   it, never drop it silently. Docs are one-per-owner; a combined doc still
   ingests via the ownership headings.
+- **recurrence_config conventions (v0.8 — the deterministic layer reads these
+  exact keys; wrong keys silently break scheduling):**
+  - one-off with a due date: `{"target": "YYYY-MM-DD"}` — this is what makes it
+    auto-surface near/overdue. A one-off without `target` is full-list only;
+    if the author wrote a `target:` line, it MUST land in the config.
+  - quota: `{"per_window": N, "window": "week"}` — `per_window`, NOT `count`
+    (`count` is a read-side legacy alias only; never author it).
 - `check_goal_scope(goal_owner_id, chapter_id)` → `{confirm_required, reason}`.
   Call before writing a goal into a chapter (see the confirm queue).
 

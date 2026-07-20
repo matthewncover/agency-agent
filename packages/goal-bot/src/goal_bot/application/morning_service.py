@@ -14,8 +14,12 @@ from goal_bot.application.ports import (
 from goal_bot.application.ritual_assembly import assemble_morning_context
 from goal_bot.domain.entities import DailyPlanItem, PlanItemStatus
 
-# Keep the Tier-1 framing excerpt short — it nudges phrasing, not behavior.
-_FRAMING_EXCERPT_MAX = 1500
+# Tier-1 framing excerpt cap — a runaway guard, not a target. Curation is the
+# real limit (the doc should stay small enough to maintain by hand); the cap
+# only stops an accidentally huge doc from flooding the prompt. Signal beats
+# an arbitrary cutoff — raised from 1500 after the first real distillation
+# pass showed the squeeze was cutting substance (2026-07-19).
+_FRAMING_EXCERPT_MAX = 4000
 
 
 @dataclass

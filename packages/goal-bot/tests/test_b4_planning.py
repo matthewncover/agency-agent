@@ -274,9 +274,15 @@ def test_heavy_day_trims_non_needs_but_keeps_every_need(
         _goal(goal_repo, person_id, f"Need {i}", RecurrenceType.DAILY)[0]
         for i in range(2)
     ]
+    # near-target one-offs: due (spec §3 bucket 3) but non-need → trimmable
     for i in range(5):
         _goal(
-            goal_repo, person_id, f"Want {i}", RecurrenceType.ONEOFF, level=Level.WANT
+            goal_repo,
+            person_id,
+            f"Want {i}",
+            RecurrenceType.ONEOFF,
+            {"target": (TODAY + timedelta(days=2)).isoformat()},
+            level=Level.WANT,
         )
 
     normal = _assemble(

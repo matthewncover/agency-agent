@@ -224,3 +224,48 @@ class TestPointerPredicate:
             RecurrenceType.ONEOFF,
         ):
             assert is_pointer_recurrence(rt) is False
+
+
+class TestOneoffIsDue:
+    def test_no_target_never_auto_surfaces(self):
+        from goal_bot.domain.recurrence import oneoff_is_due
+
+        assert oneoff_is_due({}, date(2026, 7, 19)) is False
+
+    def test_near_target_is_due(self):
+        from goal_bot.domain.recurrence import oneoff_is_due
+
+        assert oneoff_is_due({"target": "2026-07-25"}, date(2026, 7, 19)) is True
+
+    def test_far_target_not_due(self):
+        from goal_bot.domain.recurrence import oneoff_is_due
+
+        assert oneoff_is_due({"target": "2026-08-15"}, date(2026, 7, 19)) is False
+
+    def test_overdue_target_stays_due(self):
+        from goal_bot.domain.recurrence import oneoff_is_due
+
+        assert oneoff_is_due({"target": "2026-07-01"}, date(2026, 7, 19)) is True
+
+
+class TestQuotaPerWindow:
+    def test_canonical_key(self):
+        from goal_bot.domain.recurrence import quota_per_window
+
+        assert quota_per_window({"per_window": 3}) == 3
+
+    def test_count_alias(self):
+        # The first prod ingestion (2026-07) wrote `count`; it must be honored.
+        from goal_bot.domain.recurrence import quota_per_window
+
+        assert quota_per_window({"count": 2, "window": "week"}) == 2
+
+    def test_canonical_wins_over_alias(self):
+        from goal_bot.domain.recurrence import quota_per_window
+
+        assert quota_per_window({"per_window": 3, "count": 2}) == 3
+
+    def test_default(self):
+        from goal_bot.domain.recurrence import quota_per_window
+
+        assert quota_per_window({}) == 1

@@ -30,6 +30,8 @@ from goal_bot.domain.recurrence import (
     interval_is_due,
     is_heavy_day,
     is_light_day,
+    oneoff_is_due,
+    quota_per_window,
     quota_status,
     quota_window_bounds,
     rotation_days_elapsed,
@@ -108,7 +110,7 @@ def _classify(
     if rt == RecurrenceType.QUOTA:
         start, end = quota_window_bounds(plan_date, cfg.get("week_start", "monday"))
         done = plans.count_done_in_window(goal_id, start, end)
-        status = quota_status(done, cfg.get("per_window", 1), plan_date, end)
+        status = quota_status(done, quota_per_window(cfg), plan_date, end)
         if status == QuotaStatus.MET:
             return _Classification(False, _SUGGESTED)
         if status == QuotaStatus.FORCED:
@@ -124,8 +126,12 @@ def _classify(
             not accumulation_reached(total, version.target_quantity), _SUGGESTED
         )
 
-    # oneoff (and any unknown type): surfaces until done.
-    return _Classification(True, _SUGGESTED)
+    # oneoff (and any unknown type): near/overdue target only (spec §3 bucket 3,
+    # OQ-10). A no-target one-off never auto-surfaces — it stays one tap away in
+    # the full list, and a carried-over one still surfaces via the carry-over
+    # rule below. The pre-fix behavior (surface until done) buried the morning
+    # under the errand pile — the overwhelm Jade's profile warns about.
+    return _Classification(oneoff_is_due(cfg, plan_date), _SUGGESTED)
 
 
 def assemble_morning_context(

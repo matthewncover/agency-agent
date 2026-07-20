@@ -152,7 +152,8 @@ def test_subset_vs_full_list(migrated_engine, goal_repo, plan_repo, person_id):
         )
     ).id
 
-    # 6 want-level one-offs → suggested/trimmable; a daily need → must-show.
+    # 6 want-level one-offs with near targets (due per spec §3 bucket 3) →
+    # suggested/trimmable; a daily need → must-show.
     for i in range(6):
         _make_goal(
             goal_repo,
@@ -161,6 +162,7 @@ def test_subset_vs_full_list(migrated_engine, goal_repo, plan_repo, person_id):
             level=Level.WANT,
             chapter_id=chapter_id,
             recurrence=RecurrenceType.ONEOFF,
+            recurrence_config={"target": (TODAY + timedelta(days=2)).isoformat()},
         )
     g_need, _ = _make_goal(goal_repo, person_id, "Daily need", chapter_id=chapter_id)
     # one chapter-less goal
@@ -229,3 +231,81 @@ def test_no_active_chapter_means_no_preamble(migrated_engine, person_id):
     ctx = _assemble(migrated_engine, person_id)
     assert ctx.chapter_label is None
     assert ctx.chapter_preamble is None
+
+
+@pytest.mark.integration
+def test_oneoff_without_target_stays_out_of_candidates(
+    migrated_engine, goal_repo, person_id
+):
+    """Spec §3 bucket 3 (OQ-10): a no-target one-off is full-list-only — the
+    errand pile must not flood the morning."""
+    g, _ = _make_goal(
+        goal_repo, person_id, "Renew passport", recurrence=RecurrenceType.ONEOFF
+    )
+    ctx = _assemble(migrated_engine, person_id)
+    assert g.id in {c.goal_id for c in ctx.full_list}
+    assert g.id not in {c.goal_id for c in ctx.candidates}
+
+
+@pytest.mark.integration
+def test_oneoff_with_near_target_surfaces(migrated_engine, goal_repo, person_id):
+    g_near, _ = _make_goal(
+        goal_repo,
+        person_id,
+        "Register the Bronco",
+        recurrence=RecurrenceType.ONEOFF,
+        recurrence_config={"target": (TODAY + timedelta(days=3)).isoformat()},
+    )
+    g_far, _ = _make_goal(
+        goal_repo,
+        person_id,
+        "Renew passport",
+        recurrence=RecurrenceType.ONEOFF,
+        recurrence_config={"target": (TODAY + timedelta(days=30)).isoformat()},
+    )
+    ctx = _assemble(migrated_engine, person_id)
+    candidate_ids = {c.goal_id for c in ctx.candidates}
+    assert g_near.id in candidate_ids
+    assert g_far.id not in candidate_ids
+
+
+@pytest.mark.integration
+def test_carried_oneoff_without_target_still_surfaces(
+    migrated_engine, goal_repo, plan_repo, person_id
+):
+    """Carry-over presence tracking beats the target rule — a sliding promise
+    is never silently dropped."""
+    g, v = _make_goal(
+        goal_repo, person_id, "Cancel membership", recurrence=RecurrenceType.ONEOFF
+    )
+    yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
+    plan_repo.add_plan_item(
+        DailyPlanItem(daily_plan_id=yplan.id, goal_id=g.id, goal_version_id=v.id)
+    )
+    ctx = _assemble(migrated_engine, person_id)
+    carried = next(c for c in ctx.candidates if c.goal_id == g.id)
+    assert carried.is_carry_over is True
+
+
+@pytest.mark.integration
+def test_quota_count_alias_keeps_quota_alive(
+    migrated_engine, goal_repo, plan_repo, person_id
+):
+    """Prod ingestion wrote {"count": N}; the reader must not collapse it to
+    1/week (volleyball 2x: one done session must NOT mark the quota met)."""
+    g, v = _make_goal(
+        goal_repo,
+        person_id,
+        "2x/week volleyball",
+        recurrence=RecurrenceType.QUOTA,
+        recurrence_config={"count": 2, "window": "week"},
+    )
+    # complete one session earlier in this quota window (yesterday)
+    yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(daily_plan_id=yplan.id, goal_id=g.id, goal_version_id=v.id)
+    )
+    plan_repo.set_item_outcome(item.id, PlanItemStatus.DONE)
+    ctx = _assemble(migrated_engine, person_id)
+    # with count honored (2), one done session leaves the quota unmet → still due
+    assert g.id in {c.goal_id for c in ctx.candidates}
