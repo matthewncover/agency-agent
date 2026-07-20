@@ -67,8 +67,12 @@ RITUAL_TOOL_DEFS: list[dict] = [
         "name": "log_outcome",
         "description": (
             "Record an outcome the user actively reported (done|partial|not_done). "
-            "Only call this when the person explicitly reports a result — "
-            "never call it from silence or to record an unanswered touchpoint."
+            "For quantity/duration completion goals (e.g. a step count), pass the "
+            "reported number as quantity_actual — this IS the way to log a number "
+            "on a daily/quota/interval goal; log_progress is only for accumulation "
+            "goals. Only call this when the person explicitly reports a result — "
+            "never call it from silence or to record an unanswered touchpoint. "
+            "A done one-off archives itself (complete, reversible via unarchive)."
         ),
         "input_schema": {
             "type": "object",

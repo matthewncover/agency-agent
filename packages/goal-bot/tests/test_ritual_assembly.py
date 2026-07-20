@@ -288,6 +288,36 @@ def test_carried_oneoff_without_target_still_surfaces(
 
 
 @pytest.mark.integration
+def test_completed_oneoff_still_derives_tomorrows_win(
+    migrated_engine, goal_repo, plan_repo, person_id
+):
+    """Archiving a done one-off must not eat its win: derived wins read
+    yesterday's plan items by goal id, archived or not."""
+    from datetime import datetime as _dt
+
+    g, v = _make_goal(
+        goal_repo,
+        person_id,
+        "Renew passport",
+        why="freedom to travel",
+        recurrence=RecurrenceType.ONEOFF,
+    )
+    yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(daily_plan_id=yplan.id, goal_id=g.id, goal_version_id=v.id)
+    )
+    plan_repo.set_item_outcome(item.id, PlanItemStatus.DONE)
+    goal_repo.set_goal_archived(g.id, _dt.now())  # what log_outcome now does
+
+    ctx = _assemble(migrated_engine, person_id)
+    assert any(
+        w.text == "Renew passport" and w.source == "derived" for w in ctx.win_surface
+    )
+    # and the archived goal is out of today's lists
+    assert g.id not in {c.goal_id for c in ctx.full_list}
+
+
+@pytest.mark.integration
 def test_carry_does_not_promote_a_want_to_protected(
     migrated_engine, goal_repo, plan_repo, person_id
 ):

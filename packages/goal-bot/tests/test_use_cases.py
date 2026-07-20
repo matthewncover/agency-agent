@@ -200,3 +200,48 @@ def test_add_win_persists(uc, person_id):
     assert result["text"] == "hit a PR"
     wins = uc.wins.list_wins(person_id)
     assert any(w.text == "hit a PR" for w in wins)
+
+
+@pytest.mark.integration
+def test_done_oneoff_archives_itself(uc, person_id):
+    """A DONE one-off is complete: archived (stops surfacing; reversible),
+    not an auto-drop — the person's explicit report IS the decision."""
+    gid = uc.create_goal(person_id, "renew passport", chapter_id=None)
+    vid = uc.create_goal_version(
+        goal_id=gid, **{**_VERSION_KW, "recurrence_type": RecurrenceType.ONEOFF}
+    )
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "done")
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is not None
+
+
+@pytest.mark.integration
+def test_partial_oneoff_stays_active(uc, person_id):
+    gid = uc.create_goal(person_id, "renew passport", chapter_id=None)
+    vid = uc.create_goal_version(
+        goal_id=gid, **{**_VERSION_KW, "recurrence_type": RecurrenceType.ONEOFF}
+    )
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "partial")
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is None
+
+
+@pytest.mark.integration
+def test_done_recurring_goal_never_archives(uc, person_id):
+    gid = uc.create_goal(person_id, "run", chapter_id=None)
+    vid = uc.create_goal_version(goal_id=gid, **_VERSION_KW)
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "done")
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is None

@@ -209,6 +209,14 @@ class GoalUseCases:
                 self._advance_pointer_on_done(
                     item.goal_id, version, group, plan_date or date.today()
                 )
+                # A DONE one-off is complete — archive the goal so it stops
+                # surfacing. This is bookkeeping on an explicit self-report,
+                # not an auto-drop (non-negotiable 5 protects the unfinished);
+                # reversible via unarchive. Derived-win surfacing is unaffected
+                # (it reads yesterday's plan items by id). `partial` archives
+                # nothing.
+                if recurrence == RecurrenceType.ONEOFF:
+                    self.goals.set_goal_archived(item.goal_id, datetime.now())
 
         # Group-goal shared completion (behavior-spec §6): if this goal is
         # group-owned and it was completed, it's "done for both" — mark the
