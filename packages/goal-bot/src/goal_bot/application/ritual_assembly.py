@@ -253,7 +253,13 @@ def assemble_morning_context(
             continue
         item.bucket = cls.bucket
         is_need = chosen.level == Level.NEED
-        if is_need or cls.bucket in (_MUST_SHOW, _FORCED) or is_carry:
+        # Carried items keep their NATURAL bucket (spec §3 bucket 3: carried =
+        # candidates, i.e. trimmable). Carrying must never promote a want into
+        # the protected tier — escalation-through-slippage is the report-card
+        # dynamic in structural form ("yesterday's maybe hardens into today's
+        # must"). A slid NEED stays protected because needs always are; chronic
+        # slide is reassessment's job, not daily pressure's.
+        if is_need or cls.bucket in (_MUST_SHOW, _FORCED):
             protected.append(item)
         else:
             trimmable.append(item)

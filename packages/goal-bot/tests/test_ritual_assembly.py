@@ -288,6 +288,48 @@ def test_carried_oneoff_without_target_still_surfaces(
 
 
 @pytest.mark.integration
+def test_carry_does_not_promote_a_want_to_protected(
+    migrated_engine, goal_repo, plan_repo, person_id
+):
+    """A slid want keeps its natural (trimmable) bucket — carrying must never
+    escalate insistence ("yesterday's maybe hardens into today's must"). With
+    the suggested cap full of near-target one-offs, the carried want must be
+    trimmable out of candidates, while a carried NEED always survives."""
+    # fill the suggested cap with near-target want one-offs
+    for i in range(4):
+        _make_goal(
+            goal_repo,
+            person_id,
+            f"Due errand {i}",
+            level=Level.WANT,
+            recurrence=RecurrenceType.ONEOFF,
+            recurrence_config={"target": (TODAY + timedelta(days=1)).isoformat()},
+        )
+    g_want, v_want = _make_goal(
+        goal_repo, person_id, "Paint (want)", level=Level.WANT,
+        recurrence=RecurrenceType.ONEOFF,
+    )
+    g_need, v_need = _make_goal(
+        goal_repo, person_id, "Slid need", level=Level.NEED,
+        recurrence=RecurrenceType.ONEOFF,
+    )
+    yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)
+    for gid, vid in ((g_want.id, v_want.id), (g_need.id, v_need.id)):
+        plan_repo.add_plan_item(
+            DailyPlanItem(daily_plan_id=yplan.id, goal_id=gid, goal_version_id=vid)
+        )
+
+    ctx = _assemble(migrated_engine, person_id)
+    candidate_ids = {c.goal_id for c in ctx.candidates}
+    # the carried need is protected (needs always are)
+    assert g_need.id in candidate_ids
+    # the carried want competed as a normal suggested item and lost to the cap
+    assert g_want.id not in candidate_ids
+    # nothing was dropped: still in the full list
+    assert g_want.id in {c.goal_id for c in ctx.full_list}
+
+
+@pytest.mark.integration
 def test_quota_count_alias_keeps_quota_alive(
     migrated_engine, goal_repo, plan_repo, person_id
 ):
