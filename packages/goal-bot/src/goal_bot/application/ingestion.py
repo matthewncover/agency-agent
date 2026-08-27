@@ -8,7 +8,7 @@ never re-identifies goals from content (the failure mode §5.1 exists to avoid).
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 from agency_profile.application.ports import ProfileRepositoryPort
 from agency_profile.domain.entities import ProfileKind
@@ -171,9 +171,11 @@ class IngestionUseCases:
         scoped to it; close (archive) the prior chapter's goals. No cross-chapter
         lineage is recorded — deliberate (ADR-0013), keeps `gid` reconciliation
         tractable."""
-        # The prior chapter is the one active the day the new window opens over
-        # — look just before `start` (chapters are typically contiguous).
-        prior = self.goals.get_active_chapter(owner, start - timedelta(days=1))
+        # The prior chapter is the owner's latest chapter started before the
+        # new window — NOT "active the day before start": chapters are not
+        # contiguous in practice (a late rollover leaves a gap, and the old
+        # active-day-before lookup silently archived nothing).
+        prior = self.goals.get_latest_chapter_before(owner, start)
         archived = self.goals.archive_chapter_goals(prior.id) if prior else []
         new_chapter_id = self.goals.create_chapter(
             _chapter(owner, start, end, label, preamble)

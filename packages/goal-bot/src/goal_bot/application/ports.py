@@ -23,6 +23,15 @@ class GoalRepositoryPort(ABC):
     def get_active_chapter(self, owner_profile_id: int, on: date) -> Chapter | None: ...
 
     @abstractmethod
+    def get_latest_chapter_before(
+        self, owner_profile_id: int, before: date
+    ) -> Chapter | None:
+        """The owner's most recent chapter that started before `before` — the
+        rollover's archive target. Unlike get_active_chapter this tolerates a
+        gap between chapters (a late rollover): chapters are not assumed
+        contiguous."""
+
+    @abstractmethod
     def get_chapter(self, chapter_id: int) -> Chapter | None: ...
 
     @abstractmethod

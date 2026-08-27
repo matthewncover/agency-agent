@@ -249,6 +249,43 @@ def test_group_goal_in_private_chapter_flags_confirm(migrated_engine, uc, iuc):
 
 
 @pytest.mark.integration
+def test_goal_version_notes_round_trip(uc, person_id):
+    c = uc.create_chapter(person_id, *C1, "Spring")
+    g = uc.create_goal(person_id, "wake up early", chapter_id=c)
+    uc.create_goal_version(
+        goal_id=g,
+        notes="set alarm regardless of bedtime",
+        **_version("daily avg. 6:30a wake-up"),
+    )
+    _goal, versions = uc.goals.get_goal_detail(g)
+    assert versions[0].notes == "set alarm regardless of bedtime"
+
+
+def test_db_target_payload_is_sanitized(migrated_engine):
+    from goal_bot.server import db_target_payload
+
+    payload = db_target_payload(migrated_engine)
+    assert payload["database"] == migrated_engine.url.database
+    assert payload["looks_like"] == "test"
+    assert "password" not in payload
+
+
+@pytest.mark.integration
+def test_rollover_archives_prior_chapter_across_a_gap(uc, iuc, person_id):
+    # Regression: the prior-chapter lookup used "active the day before start",
+    # so a late rollover (gap between chapters) silently archived nothing.
+    c1 = uc.create_chapter(person_id, *C1, "Spring")
+    g = uc.create_goal(person_id, "step goal", chapter_id=c1)
+    uc.create_goal_version(goal_id=g, **_version("5k steps", target_quantity=5000))
+
+    result = iuc.rollover(
+        person_id, date(2026, 9, 1), date(2026, 10, 15), carried=[], label="Fall"
+    )
+
+    assert result["archived_goal_ids"] == [g]
+
+
+@pytest.mark.integration
 def test_rollover_carries_preamble_onto_new_chapter(uc, iuc, person_id):
     uc.create_chapter(person_id, *C1, "Spring")
     result = iuc.rollover(

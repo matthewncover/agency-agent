@@ -63,6 +63,7 @@ def _goal_version(row) -> GoalVersion:
         quantity_unit=row.quantity_unit,
         task_ref_source=row.task_ref_source,
         task_ref_id=row.task_ref_id,
+        notes=row.notes,
         effective_from=row.effective_from,
         effective_to=row.effective_to,
         lifecycle=row.lifecycle,
@@ -99,6 +100,7 @@ def _insert_goal_version_row(c, version: GoalVersion) -> GoalVersion:
         "quantity_unit": version.quantity_unit,
         "task_ref_source": version.task_ref_source,
         "task_ref_id": version.task_ref_id,
+        "notes": version.notes,
         "lifecycle": version.lifecycle,
     }
     if version.effective_from is not None:
@@ -165,6 +167,19 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 .where(t.chapter.c.owner_profile_id == owner_profile_id)
                 .where(t.chapter.c.start_date <= on)
                 .where(t.chapter.c.end_date >= on)
+                .limit(1)
+            ).one_or_none()
+        return _chapter(row) if row else None
+
+    def get_latest_chapter_before(
+        self, owner_profile_id: int, before: date
+    ) -> Chapter | None:
+        with self._engine.connect() as c:
+            row = c.execute(
+                select(t.chapter)
+                .where(t.chapter.c.owner_profile_id == owner_profile_id)
+                .where(t.chapter.c.start_date < before)
+                .order_by(t.chapter.c.end_date.desc(), t.chapter.c.id.desc())
                 .limit(1)
             ).one_or_none()
         return _chapter(row) if row else None
