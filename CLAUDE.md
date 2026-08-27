@@ -23,7 +23,7 @@ Process notes live in [doc/process/](doc/process/); retired/consumed material is
 
 These bound what an AI agent may do in this repo. Like the non-negotiables below, they are hard limits — surface a conflict, don't quietly work around it.
 
-- **Never run git state-changing commands.** Do **not** run `git commit`, `git push`, `git rebase`, `git reset`, `git merge`, `git cherry-pick`, `git revert`, `git checkout`/`git switch` that discards work, `git stash` that drops work, `git clean`, `git tag`, `git branch -D`, or any force/`--hard`/history-rewriting variant. Staging, committing, branching, and pushing are the human's decision. Read-only git (`git status`, `git diff`, `git log`, `git show`) and `git add` is fine.
+- **Never run git state-changing commands.** Do **not** run `git push`, `git rebase`, `git reset`, `git merge`, `git cherry-pick`, `git revert`, `git checkout`/`git switch` that discards work, `git stash` that drops work, `git clean`, `git tag`, `git branch -D`, or any force/`--hard`/history-rewriting variant. Staging, committing, branching, and pushing are the human's decision. Read-only git (`git status`, `git diff`, `git log`, `git show`) and `git add` and `git commit` are fine.
 - **Don't rewrite or delete history.** No history-rewriting, force-pushing, or deleting branches/tags/stashes.
 - **Propose, don't execute, version-control actions.** When work is ready to commit or push, describe exactly what you'd run and let the human run it.
 - **No destructive or outward-facing actions without explicit approval.** No deleting/overwriting files you didn't create, no publishing to external services, no editing ADR bodies (ADRs are append-only — supersede, never rewrite).
