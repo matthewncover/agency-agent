@@ -52,6 +52,8 @@ INGESTION_TOOLS = [
     "diff_chapter",
     "rollover",
     "check_goal_scope",
+    # Session-safety read: which DB the server is bound to (ingestion step 0).
+    "get_db_target",
 ]
 # Reads in the ingestion grant: NO get_plan — ingestion never touches daily
 # plans and get_plan has a get-or-create side-effect (mcp-tools §2/§3.4).
@@ -329,6 +331,38 @@ def build_ingestion_use_cases(engine: Engine) -> IngestionUseCases:
     )
 
 
+def db_target_payload(engine: Engine) -> dict:
+    """Sanitized description of the DB an MCP server is bound to (no password).
+    `looks_like` follows the monorepo port convention: 5432 = local dev,
+    5433 = prod via the ssh tunnel."""
+    url = engine.url
+    if url.database and url.database.endswith("_test"):
+        looks_like = "test"
+    elif url.port == 5433:
+        looks_like = "prod (ssh tunnel :5433)"
+    elif url.port in (None, 5432):
+        looks_like = "dev (local :5432)"
+    else:
+        looks_like = "unknown"
+    return {
+        "host": url.host,
+        "port": url.port,
+        "database": url.database,
+        "user": url.username,
+        "looks_like": looks_like,
+    }
+
+
+def _register_db_target(mcp: FastMCP, engine: Engine) -> None:
+    @mcp.tool
+    def get_db_target() -> dict:
+        """Which database this server is bound to — fixed at LAUNCH; `.env`
+        edits do NOT apply until the server is reconnected. Call this FIRST in
+        any ingestion session and show the user the answer before writing
+        anything (ingestion step 0). Never returns the password."""
+        return db_target_payload(engine)
+
+
 def build_server(engine: Engine) -> FastMCP:
     mcp = FastMCP("goal-bot")
     uc = build_use_cases(engine)
@@ -336,6 +370,7 @@ def build_server(engine: Engine) -> FastMCP:
     reads.register_read_tools(mcp, uc)
     authoring.register_authoring_tools(mcp, uc)
     ingestion.register_ingestion_tools(mcp, build_ingestion_use_cases(engine))
+    _register_db_target(mcp, engine)
     return mcp
 
 
@@ -347,4 +382,5 @@ def build_ingestion_server(engine: Engine) -> FastMCP:
     authoring.register_authoring_tools(mcp, uc)
     reads.register_read_tools(mcp, uc, include=INGESTION_READS)
     ingestion.register_ingestion_tools(mcp, build_ingestion_use_cases(engine))
+    _register_db_target(mcp, engine)
     return mcp

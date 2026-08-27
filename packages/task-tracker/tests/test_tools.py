@@ -132,6 +132,14 @@ class TestSearchTasksTool:
         assert len(results) == 2
 
 
+class TestGetDbTargetTool:
+    def test_reports_bound_database_sanitized(self, tools_env, migrated_engine):
+        target = tools_env.get_db_target()
+        assert target["database"] == migrated_engine.url.database
+        assert target["looks_like"] == "test"
+        assert "password" not in target
+
+
 class TestGetTimeTool:
     def test_defaults_to_pacific(self, tools_env):
         result = tools_env.get_time()

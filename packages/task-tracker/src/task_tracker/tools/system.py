@@ -6,8 +6,39 @@ from task_tracker.application.use_cases import SetMetaUseCase
 DEFAULT_TIMEZONE = "America/Los_Angeles"
 
 
-def register(mcp, repos):
+def register(mcp, repos, engine=None, owner_id=None):
     system_meta_repo = repos["system_meta"]
+
+    if engine is not None:
+
+        @mcp.tool(
+            description=(
+                "Which database this server is bound to — fixed at LAUNCH; "
+                ".env edits do NOT apply until the server is reconnected. Call "
+                "first in any session that must not write to the wrong DB "
+                "(dev vs prod) and show the user the answer. Never returns "
+                "the password."
+            )
+        )
+        def get_db_target() -> dict:
+            """Report the server's bound database (sanitized) and owner id."""
+            url = engine.url
+            if url.database and url.database.endswith("_test"):
+                looks_like = "test"
+            elif url.port == 5433:
+                looks_like = "prod (ssh tunnel :5433)"
+            elif url.port in (None, 5432):
+                looks_like = "dev (local :5432)"
+            else:
+                looks_like = "unknown"
+            return {
+                "host": url.host,
+                "port": url.port,
+                "database": url.database,
+                "user": url.username,
+                "owner_id": owner_id,
+                "looks_like": looks_like,
+            }
 
     @mcp.tool(
         description=(
@@ -54,7 +85,10 @@ def register(mcp, repos):
             "utc_offset": now.strftime("%z"),
         }
 
-    return {
+    tools = {
         "set_meta": set_meta,
         "get_time": get_time,
     }
+    if engine is not None:
+        tools["get_db_target"] = get_db_target
+    return tools

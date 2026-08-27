@@ -43,7 +43,7 @@ def create_app(engine: Engine | None = None, owner_id: int | None = None):
         "daily_log": PgDailyLogRepositoryAdapter(engine, owner_id),
         "system_meta": PgSystemMetaRepositoryAdapter(engine),
     }
-    tools = register_all(app, repos)
+    tools = register_all(app, repos, engine=engine, owner_id=owner_id)
     return app, tools
 
 
