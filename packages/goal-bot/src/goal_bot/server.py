@@ -14,6 +14,7 @@ from goal_bot.tools import authoring, ingestion, reads, ritual
 
 RITUAL_TOOLS = [
     "log_outcome",
+    "revert_outcome",
     "lock_in_plan",
     "add_win",
     "record_reflection",
@@ -72,7 +73,8 @@ RITUAL_TOOL_DEFS: list[dict] = [
             "on a daily/quota/interval goal; log_progress is only for accumulation "
             "goals. Only call this when the person explicitly reports a result — "
             "never call it from silence or to record an unanswered touchpoint. "
-            "A done one-off archives itself (complete, reversible via unarchive)."
+            "A done one-off archives itself (complete, reversible via unarchive). "
+            "Mis-logged something? Undo it with revert_outcome, then log correctly."
         ),
         "input_schema": {
             "type": "object",
@@ -82,6 +84,24 @@ RITUAL_TOOL_DEFS: list[dict] = [
                 "quantity_actual": {"type": "number"},
             },
             "required": ["daily_plan_item_id", "status"],
+        },
+    },
+    {
+        "name": "revert_outcome",
+        "description": (
+            "Undo a mis-logged outcome on the user's explicit correction: "
+            "restores the item to planned and clears quantity_actual; "
+            "un-archives a one-off that auto-archived on done. Does NOT rewind "
+            "rotation/interval pointers (use set_rotation_pointer / "
+            "set_rotation_group_pointer), does NOT restore the carry-over "
+            "counter, and never touches a partner's shared-completion item."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "daily_plan_item_id": {"type": "integer"},
+            },
+            "required": ["daily_plan_item_id"],
         },
     },
     {

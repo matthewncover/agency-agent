@@ -10,6 +10,7 @@ from goal_bot.application.use_cases import GoalUseCases
 _RITUAL_GRANT: frozenset[str] = frozenset(
     {
         "log_outcome",
+        "revert_outcome",
         "lock_in_plan",
         "add_win",
         "record_reflection",

@@ -227,6 +227,34 @@ class GoalUseCases:
 
         return item.model_dump()
 
+    def revert_outcome(self, daily_plan_item_id: int) -> dict:
+        """Undo a mis-logged outcome: restore the item to `planned` and clear
+        quantity_actual. Correction-only, on the user's explicit say-so. Does
+        NOT rewind rotation/interval pointers (set_rotation_pointer /
+        set_rotation_group_pointer are the correction tools there), does NOT
+        restore the carry-over counter (no history to restore from; the drift
+        errs non-punitive), and never touches a partner's propagated
+        shared-completion item — they may genuinely have done it."""
+        existing = self.plans.get_item(daily_plan_item_id)
+        if existing is None:
+            raise ValueError(f"no plan item {daily_plan_item_id}")
+        prior = existing.status
+        if prior == PlanItemStatus.PLANNED:
+            return existing.model_dump()  # nothing to undo
+
+        item = self.plans.set_item_outcome(
+            daily_plan_item_id, PlanItemStatus.PLANNED, None
+        )
+
+        # A done one-off archived itself inside log_outcome; reverting the done
+        # un-archives it so the goal surfaces again.
+        if prior == PlanItemStatus.DONE:
+            version = self._version_of(existing.goal_id, existing.goal_version_id)
+            if version is not None and version.recurrence_type == RecurrenceType.ONEOFF:
+                self.goals.set_goal_archived(item.goal_id, None)
+
+        return item.model_dump()
+
     def _propagate_shared_completion(self, item) -> None:
         if self.profiles is None:
             return

@@ -46,6 +46,20 @@ def test_prompt_name_the_bar():
     assert "bar" in lower
 
 
+def test_prompt_past_day_logging_guidance():
+    prompt = build_system_prompt(_ctx())
+    lower = prompt.lower()
+    assert "past" in lower and "never logged against today" in lower
+    assert "get_plan" in prompt
+    assert "revert_outcome" in prompt
+
+
+def test_prompt_returns_to_open_question():
+    lower = build_system_prompt(_ctx()).lower()
+    assert "still-open question" in lower
+    assert "never repeat the ask louder" in lower
+
+
 def test_prompt_thin_day_includes_meaning_linked_ack():
     lower = build_system_prompt(_ctx(thin_day=True)).lower()
     assert "meaning" in lower or "meaning-linked" in lower

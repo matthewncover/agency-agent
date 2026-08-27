@@ -65,6 +65,32 @@ give suggestions." Offer an entry point or a smaller alternative; the goal is to
 the ball rolling, not to repeat the ask louder.
 """
 
+_PAST_DAY_LOGGING = """\
+## Logging outcomes for past days (and correcting mistakes)
+
+- A report about a PAST day ("yesterday I walked 10k steps") is NEVER logged against \
+today's plan item. Call `get_plan(owner, on=<that date>)` to fetch that day's items \
+(they carry ids) and log the outcome against the matching item there. Today's item \
+stays `planned`.
+- Pointer-recurrence goals (interval/rotation, rotation-group members) reject \
+backdating — if the log is refused, the correction path is `set_rotation_pointer` / \
+`set_rotation_group_pointer`, offered to the person, never applied silently.
+- If it's ambiguous which day the person means, ask.
+- If an outcome landed on the wrong item, call `revert_outcome` on the wrong item \
+(restores it to planned), then log against the right one. Handle corrections \
+matter-of-factly — a mis-log is bookkeeping, never something the person did wrong.
+"""
+
+_CONVERSATION_FLOW = """\
+## Conversation flow
+
+If you asked an open question (e.g. the lock-in offer) and the person replies with \
+something else — an update, a correction, a report — handle that first, then return \
+to the still-open question in the same reply, restated briefly. One gentle return \
+per open thread: it stays an offer, and if the person declines or lets it pass \
+again, drop it — never repeat the ask louder.
+"""
+
 _THIN_DAY_INSTRUCTION = """\
 ## Thin day
 
@@ -144,6 +170,8 @@ def build_system_prompt(ctx: MorningContext) -> str:
         _RULES,
         _MORNING_ORDER,
         _PHRASING_RULES,
+        _PAST_DAY_LOGGING,
+        _CONVERSATION_FLOW,
         _NAME_THE_BAR_GATE,
     ]
 

@@ -235,6 +235,75 @@ def test_partial_oneoff_stays_active(uc, person_id):
 
 
 @pytest.mark.integration
+def test_revert_outcome_restores_planned_and_clears_quantity(uc, person_id):
+    gid = uc.create_goal(person_id, "steps", chapter_id=None)
+    vid = uc.create_goal_version(goal_id=gid, **_VERSION_KW)
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "done", quantity_actual=10000)
+    result = uc.revert_outcome(item.id)
+    assert result["status"] == "planned"
+    assert result["quantity_actual"] is None
+
+
+@pytest.mark.integration
+def test_revert_outcome_done_oneoff_unarchives(uc, person_id):
+    """Reverting a mis-logged done on a one-off undoes the self-archive so the
+    goal surfaces again."""
+    gid = uc.create_goal(person_id, "renew passport", chapter_id=None)
+    vid = uc.create_goal_version(
+        goal_id=gid, **{**_VERSION_KW, "recurrence_type": RecurrenceType.ONEOFF}
+    )
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "done")
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is not None
+    uc.revert_outcome(item.id)
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is None
+
+
+@pytest.mark.integration
+def test_revert_outcome_partial_leaves_archive_untouched(uc, person_id):
+    gid = uc.create_goal(person_id, "renew passport", chapter_id=None)
+    vid = uc.create_goal_version(
+        goal_id=gid, **{**_VERSION_KW, "recurrence_type": RecurrenceType.ONEOFF}
+    )
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    uc.log_outcome(item.id, "partial")
+    result = uc.revert_outcome(item.id)
+    assert result["status"] == "planned"
+    goal, _ = uc.goals.get_goal_detail(gid)
+    assert goal.archived_at is None
+
+
+@pytest.mark.integration
+def test_revert_outcome_already_planned_is_noop(uc, person_id):
+    gid = uc.create_goal(person_id, "run", chapter_id=None)
+    vid = uc.create_goal_version(goal_id=gid, **_VERSION_KW)
+    plan = uc.plans.get_or_create_plan(person_id, TODAY)
+    item = uc.plans.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=gid, goal_version_id=vid)
+    )
+    result = uc.revert_outcome(item.id)
+    assert result["status"] == "planned"
+
+
+@pytest.mark.integration
+def test_revert_outcome_unknown_item_raises(uc):
+    with pytest.raises(ValueError, match="no plan item"):
+        uc.revert_outcome(999999)
+
+
+@pytest.mark.integration
 def test_done_recurring_goal_never_archives(uc, person_id):
     gid = uc.create_goal(person_id, "run", chapter_id=None)
     vid = uc.create_goal_version(goal_id=gid, **_VERSION_KW)

@@ -12,6 +12,12 @@ def register_ritual_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         return uc.log_outcome(daily_plan_item_id, status, quantity_actual)
 
     @mcp.tool
+    def revert_outcome(daily_plan_item_id: int) -> dict:
+        """Undo a mis-logged outcome: restore the item to planned and clear
+        quantity_actual. Does not rewind pointers or the carry-over counter."""
+        return uc.revert_outcome(daily_plan_item_id)
+
+    @mcp.tool
     def lock_in_plan(daily_plan_id: int, explicit: bool = True) -> dict:
         """Finalize a plan the user explicitly assented to."""
         return uc.lock_in_plan(daily_plan_id, explicit)

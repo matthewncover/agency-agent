@@ -105,6 +105,46 @@ def test_report_done(migrated_engine, person_id, goal_repo, plan_repo):
 
 
 @pytest.mark.integration
+def test_revert_outcome_dispatches(migrated_engine, person_id, goal_repo, plan_repo):
+    """A mis-logged done is undone through the ritual grant: the item returns
+    to planned."""
+    g = goal_repo.create_goal(Goal(owner_profile_id=person_id, title="Move"))
+    v = goal_repo.create_goal_version(
+        GoalVersion(goal_id=g.id, level=Level.NEED, definition="20 min", **_VKW)
+    )
+    plan = plan_repo.get_or_create_plan(person_id, TODAY)
+    item = plan_repo.add_plan_item(
+        DailyPlanItem(daily_plan_id=plan.id, goal_id=g.id, goal_version_id=v.id)
+    )
+    plan_repo.set_item_outcome(item.id, PlanItemStatus.DONE)
+
+    fake = FakeLLM(
+        [
+            LLMResponse(text="Morning!"),
+            LLMResponse(
+                text="",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="revert_outcome",
+                        args={"daily_plan_item_id": item.id},
+                    )
+                ],
+            ),
+            LLMResponse(text="Undone — back to planned."),
+        ]
+    )
+    turn = _make_turn(migrated_engine, fake)
+
+    session = turn.start(_empty_ctx(person_id))
+    session = turn.reply(session, "that was yesterday, undo it")
+
+    items = plan_repo.get_plan_items(plan.id)
+    assert any(i.id == item.id and i.status == PlanItemStatus.PLANNED for i in items)
+    assert "Undone" in session.response_text
+
+
+@pytest.mark.integration
 def test_manual_win(migrated_engine, person_id, win_repo):
     fake = FakeLLM(
         [
