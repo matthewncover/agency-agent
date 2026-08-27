@@ -32,13 +32,15 @@ def register_ingestion_tools(mcp: FastMCP, uc: IngestionUseCases) -> None:
         end: date,
         carried: list[dict],
         label: str | None = None,
+        preamble: str | None = None,
     ) -> dict:
         """Open a new chapter window and carry goals forward as FRESH goals
         scoped to it, archiving the prior chapter's goals. `carried` is a list of
-        {title, chapter_id?, versions:[...]} (chapter_id is overwritten). No
-        cross-chapter lineage is kept (ADR-0013). Returns
-        {chapter_id, new_goal_ids, archived_goal_ids}."""
-        return uc.rollover(owner, start, end, carried, label)
+        {title, chapter_id?, versions:[...]} (chapter_id is overwritten).
+        `preamble` is the authored per-chapter framing, stored verbatim
+        (goal-markdown §2.1). No cross-chapter lineage is kept (ADR-0013).
+        Returns {chapter_id, new_goal_ids, archived_goal_ids}."""
+        return uc.rollover(owner, start, end, carried, label, preamble)
 
     @mcp.tool
     def check_goal_scope(goal_owner_id: int, chapter_id: int) -> dict:
