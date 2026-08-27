@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from datetime import date
 
+from goal_bot import transcript
 from goal_bot.application.llm_port import LLMPort, LLMResponse, ToolCall
 from goal_bot.application.morning_context import MorningContext
 from goal_bot.application.prompt import build_system_prompt
@@ -102,15 +103,19 @@ class MorningTurn:
 
     def _dispatch(self, tc: ToolCall) -> dict:
         if tc.name not in _RITUAL_GRANT:
-            return {
+            result = {
                 "error": (
                     f"tool '{tc.name}' is not in the ritual grant — no action taken"
                 )
             }
+            transcript.log_tool(tc.name, dict(tc.args), result)
+            return result
 
         method = getattr(self.uc, tc.name, None)
         if method is None:
-            return {"error": f"no dispatch implementation for '{tc.name}'"}
+            result = {"error": f"no dispatch implementation for '{tc.name}'"}
+            transcript.log_tool(tc.name, dict(tc.args), result)
+            return result
 
         args = dict(tc.args)
         if "on" in args and isinstance(args["on"], str):
@@ -118,6 +123,8 @@ class MorningTurn:
 
         try:
             result = method(**args)
-            return result if isinstance(result, dict) else {"result": result}
+            result = result if isinstance(result, dict) else {"result": result}
         except Exception as exc:
-            return {"error": str(exc)}
+            result = {"error": str(exc)}
+        transcript.log_tool(tc.name, dict(tc.args), result)
+        return result

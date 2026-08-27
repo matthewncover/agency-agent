@@ -12,6 +12,7 @@ from telegram.ext import (
     filters,
 )
 
+from goal_bot import transcript
 from goal_bot.application.heartbeat_port import HeartbeatPort, NoopHeartbeat
 from goal_bot.application.morning_service import MorningService
 from goal_bot.application.morning_turn import Session
@@ -112,10 +113,12 @@ class TelegramAdapter:
         if person_id is None:
             return
         chat_id = update.effective_chat.id
+        transcript.log_message(chat_id, person_id, "in", "/morning")
         session = self._service.fire_morning(person_id, date.today())
         self._sessions[chat_id] = session
         if session.response_text:
             await update.message.reply_text(session.response_text)
+            transcript.log_message(chat_id, person_id, "out", session.response_text)
 
     async def _handle_text(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -138,10 +141,12 @@ class TelegramAdapter:
         if not session:
             return
         text = strip_mention(update.message.text, bot.username or "")
+        transcript.log_message(chat_id, person_id, "in", text)
         session = self._service.handle_reply(session, text)
         self._sessions[chat_id] = session
         if session.response_text:
             await update.message.reply_text(session.response_text)
+            transcript.log_message(chat_id, person_id, "out", session.response_text)
 
     async def _cmd_whoami(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -170,6 +175,9 @@ class TelegramAdapter:
             sessions[chat_id] = session
             if session.response_text:
                 await app.bot.send_message(chat_id=chat_id, text=session.response_text)
+                transcript.log_message(
+                    chat_id, person_id, "out", session.response_text
+                )
                 # Liveness ping (ADR-0017): only after the message actually went
                 # out, and only on the *scheduled* path — a manual /morning must
                 # not mask a dead scheduler. Keyed to delivery, never to whether
