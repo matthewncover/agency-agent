@@ -9,6 +9,7 @@ The bot emits one JSON line per event on the `goal_bot.transcript` logger (stder
 
 - `{"chat_id", "person_id", "direction": "in"|"out", "text", "ts"}` — a user message ("in") or bot reply ("out").
 - `{"direction": "tool", "tool", "args", "ok", "error", "ts"}` — a tool call made by the LLM during a turn, with its args and whether it errored. Correlate to messages by timestamp.
+- `{"direction": "usage", "model", "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "ts"}` — the API `usage` block, one line per LLM *call* (a turn with tool calls makes several calls — sum them).
 
 Transcripts exist only from the time this feature was deployed; there is no backfill, and journald retention bounds how far back you can read.
 
@@ -39,6 +40,19 @@ Useful filters (append to the base pipe):
 ```
 
 To reconstruct a full conversation with the tool calls interleaved, drop the direction filter and sort by `ts` (lines are already chronological).
+
+Cost for a time window (Sonnet 5 rates $2/$10 per MTok; swap rates for other models):
+
+```sh
+| jq -s 'map(select(.direction == "usage"))
+  | {calls: length,
+     input: (map(.input_tokens) | add),
+     output: (map(.output_tokens) | add),
+     cache_read: (map(.cache_read_input_tokens // 0) | add)}
+  | . + {usd: (.input * 2 + .output * 10) / 1e6}'
+```
+
+For a per-day series, run the base read with `--since <day> --until <day+1>` per day. Cross-check totals against the Console usage page before drawing conclusions.
 
 ## Local dev
 

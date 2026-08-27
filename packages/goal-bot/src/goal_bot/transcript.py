@@ -28,6 +28,26 @@ def log_message(chat_id: int, person_id: int, direction: str, text: str) -> None
     )
 
 
+def log_usage(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_input_tokens: int | None = None,
+    cache_creation_input_tokens: int | None = None,
+) -> None:
+    """One line per API call (a turn with tool calls = several calls)."""
+    _emit(
+        {
+            "direction": "usage",
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_input_tokens": cache_read_input_tokens,
+            "cache_creation_input_tokens": cache_creation_input_tokens,
+        }
+    )
+
+
 def log_tool(name: str, args: dict, result: dict) -> None:
     """Tool call + outcome. Correlate with messages by timestamp."""
     error = result.get("error") if isinstance(result, dict) else None

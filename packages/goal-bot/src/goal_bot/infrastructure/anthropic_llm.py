@@ -1,5 +1,6 @@
 import anthropic
 
+from goal_bot import transcript
 from goal_bot.application.llm_port import LLMPort, LLMResponse, ToolCall
 
 
@@ -25,6 +26,18 @@ class AnthropicLLMAdapter(LLMPort):
             kwargs["tools"] = tools
 
         resp = self._client.messages.create(**kwargs)
+
+        transcript.log_usage(
+            model=self._model,
+            input_tokens=resp.usage.input_tokens,
+            output_tokens=resp.usage.output_tokens,
+            cache_read_input_tokens=getattr(
+                resp.usage, "cache_read_input_tokens", None
+            ),
+            cache_creation_input_tokens=getattr(
+                resp.usage, "cache_creation_input_tokens", None
+            ),
+        )
 
         text = ""
         tool_calls: list[ToolCall] = []
