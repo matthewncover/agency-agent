@@ -29,6 +29,9 @@ run**, don't work from memory:
 ## Inputs
 
 - **Source markdown path** (the Obsidian file). Ask the user if not provided.
+  The clean copy-me skeleton is `doc/templates/chapter-template.md` — the
+  working file should contain goals, not instructional boilerplate; treat any
+  leftover template prose as non-goals and say so.
   Claude cannot read `~/Documents` (macOS TCC) — if the path is in the vault,
   have the user copy it somewhere readable and paste the gid-marked copy back.
 - **Owner** = a person profile id. Default **1** (Matthew). Confirm only if
@@ -39,18 +42,22 @@ run**, don't work from memory:
 MCP servers read `.env` **only at launch**; the file and the running server
 drift silently. Never assume — verify, show the user, get a nod:
 
-1. State which DB `.env`'s `DATABASE_URL` points at (dev, or prod via the
-   `localhost:5433` ssh tunnel). If it was just changed, the user must `/mcp`
-   → reconnect **both** `goal-bot-ingestion` and `task-tracker` (they resolve
-   `.env` independently — a mismatch between them writes goals and tasks to
-   different databases).
-2. Prove it with data: `get_active_chapter(owner, today)` and a known-task
-   probe (`search_tasks` for something that exists only in the intended DB).
-   State the evidence ("no chapter → fresh prod") before the first write.
-3. **Prod sessions**: confirm the ssh tunnel is up first; at session end,
-   remind the user to revert `.env` to dev and reconnect again — anything that
-   reads `.env` (pytest's live fixture, `just seed`, `just toy-reset`) hits
-   real data while it points at prod.
+1. Call **`get_db_target`** on BOTH servers (`goal-bot-ingestion` and
+   `task-tracker` each expose it; sanitized, no password). Show the user both
+   answers. They must agree with each other AND with the intended target
+   (`looks_like`: "dev (local :5432)" vs "prod (ssh tunnel :5433)") — a
+   mismatch between the two servers writes goals and tasks to different
+   databases. If `.env` was just changed, the user must `/mcp` → reconnect
+   both servers, then call `get_db_target` again (the tool reports the
+   binding at launch, so it also proves the reconnect happened).
+2. For prod writes, optionally corroborate with data: `get_active_chapter(
+   owner, today)` and a known-task probe (`search_tasks` for something that
+   exists only in prod). State the evidence before the first write.
+3. **Prod sessions**: confirm the ssh tunnel is up first (`lsof -nP
+   -iTCP:5433 -sTCP:LISTEN`; kick `com.matthew.vps-pg-tunnel` on the Mac if
+   not); at session end, revert `.env` to dev, have the user reconnect, and
+   re-verify with `get_db_target` — anything that reads `.env` (`just seed`,
+   `just toy-reset`) hits real data while it points at prod.
 
 ## Tools (the `goal-bot-ingestion` MCP grant)
 
@@ -59,7 +66,7 @@ Authoring: `create_goals`, `create_goal_versions` (batch — **prefer these**),
 Rotation groups (ADR-0016): `create_rotation_group`, `archive_rotation_group`,
 `list_rotation_groups`.
 Reads: `get_active_chapter`, `get_full_goal_list`, `get_goal_detail`,
-`get_goals_for_chapter`.
+`get_goals_for_chapter`, `get_db_target` (step 0).
 Deterministic goal-setting / re-ingest ops (B2): `propose_candidates`,
 `diff_chapter`, `rollover`, `check_goal_scope`.
 (No `get_plan`, no ritual/outcome writes — out of grant by design.)
@@ -105,7 +112,7 @@ input, act on what they return.
   `[{gid, title, versions:[{level, version_id, version_no}]}]` — use each `gid`
   for write-back. Each goal: `{title, chapter_id?, versions:[ {level, definition,
   recurrence_type, recurrence_config, completion_type, why?, target_quantity?,
-  quantity_unit?, obstacles?, task_ref_source?, task_ref_id?} ]}`.
+  quantity_unit?, obstacles?, task_ref_source?, task_ref_id?, notes?} ]}`.
 - `create_goal_versions(versions)` — batch bar-bumps on EXISTING goals during
   re-ingest (each carries `goal_id`). Returns the new version ids.
 - Fall back to the singles only for a one-off correction.
@@ -128,7 +135,12 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
 1. **Resolve owner; read the source file** (use Read on the Obsidian path).
 2. **Parse** per goal-markdown §3 (ownership, levels, explode buckets, splits,
    cadence). `why` is required; reject a goal without one. This is your job —
-   the loose-markdown → structured-record step.
+   the loose-markdown → structured-record step. Parsing conventions (v0.9):
+   - **Level aliases:** `stretch:` = `want:`, `min:` = `need:` (accepted
+     without a confirm; explicit need/want still canonical).
+   - **`notes:` lines** land verbatim on `goal_version.notes` (written to all
+     active versions, like `why`) — never fold them into the bar definition,
+     never drop them.
    **Then lint before anything interactive** — one consolidated gap report, not
    gaps discovered mid-flow: every goal missing a `why` (including want-only
    goals and `why: see below`-style dangling references), file header dates vs
@@ -137,10 +149,16 @@ Gotchas that differ from the raw schema (apply to batch and singles alike):
    exist yet (provisioning needed). Get all answers in one round-trip.
 3. **Classify the run by the file's date header** vs `get_active_chapter(owner,
    today)` — and let the tools resolve identity, don't diff by hand:
-   - **Header is a new window** → **rollover.** Call `rollover(owner, start,
-     end, carried, label?)` with the carried-forward goals; it mints fresh
-     `gid`s in the new chapter and archives the prior one (§5.5). Do **not**
-     hand-roll `create_chapter` + archive.
+   - **Header is a new window** → **rollover.** FIRST run the **carry-over
+     checklist**: fetch the prior chapter's goals (`get_goals_for_chapter` on
+     the owner's latest prior chapter) and present every non-archived goal as
+     an explicit keep/drop list against the new markdown — absence from the
+     new file alone never silently drops a goal; the user confirms each drop.
+     Then call `rollover(owner, start, end, carried, label?, preamble?)` with
+     the confirmed carried goals; it mints fresh `gid`s in the new chapter and
+     archives the prior chapter's goals (gap-tolerant: the prior chapter is
+     the latest one started before the new window). Do **not** hand-roll
+     `create_chapter` + archive.
    - **Header matches the open chapter** → **mid-chapter re-ingest.** Call
      `diff_chapter(chapter_id, parsed)` and act on its classifications (step 5).
      Don't re-derive new-vs-version yourself (§5.2).

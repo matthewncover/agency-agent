@@ -1,7 +1,8 @@
 # Goal-Markdown — Authoring Template & Ingestion Contract
  
-> **Doc:** `doc/templates/goal-markdown.md` · **v0.7** · status: Phase-2 (chat T) output
+> **Doc:** `doc/templates/goal-markdown.md` · **v0.9** · status: Phase-2 (chat T) output
 > **Role:** Defines (a) the markdown you write goals in (Obsidian), and (b) the contract the *separate* ingestion chat follows to turn that markdown into structured DB records per spec §6. Ingestion runs in its own Claude chat, **not** the Telegram bot. This doc does not build the runtime.
+> **v0.8 → v0.9 (from the 2026-08-27 rollover retro):** (a) **level aliases re-admitted**: `stretch:` parses as `want:`, `min:` as `need:` — the aliases were dropped in v0.2 but authoring habit won twice; explicit `need:`/`want:` still canonical. (b) **`notes:` field** (migration 0008): authored logistics ("set alarm regardless of bedtime") stored verbatim on `goal_version.notes`, written to all active versions like `why` — no longer folded into the bar `definition`. (c) **Rollover carry-over checklist**: on a new-window ingest, ingestion fetches the prior chapter's goals and presents an explicit keep/drop list before minting — absence from the new md alone never silently drops a goal. (d) The copy-me authoring skeleton lives in [`chapter-template.md`](chapter-template.md); keep instructional boilerplate out of the working goals file.
 > **v0.7 → v0.8 (semantics only, no authoring change):** one-off surfacing now follows spec §3 bucket 3 (OQ-10): a one-off enters the morning subset only when its `target:` date is **near (≤7 days) or overdue**, or when carried over. **No `target:` = full-list only** — write a `target:` on any one-off you want the bot to proactively surface. Config conventions: one-off `{"target": "YYYY-MM-DD"}`; quota's canonical key is `per_window` (`count` accepted as a legacy alias from the first prod ingestion).
 > **v0.6 → v0.7:** **chapter preamble + per-owner docs** (migration 0006). Optional free-prose preamble under the window header — theme, this-season focus, deliberately-parked domains — stored verbatim on `chapter.preamble` and injected into the morning prompt (parked domains are chosen priorities; the bot never nudges toward them). Because chapters are per-profile (windows, themes, and parked lists differ per person), **one doc per owner** (yours, hers, the couple's) is now the recommended layout; the `### Name` ownership headings are unchanged, so a combined doc still ingests.
 > **v0.5 → v0.6:** **rotation groups** (ADR-0016): goals sharing one alternating rhythm (pushups / pull-ups) stay separate goals and get a `rotate:` line naming the shared sequence (§2.0, §3.5). The §3.5 "two independent 4-day clocks" artifact is retired — local testing showed the drift is not acceptable (both surfaced the same day).
@@ -28,13 +29,14 @@
 ### 2.0 Conventions (read once)
  
 - **Ownership** comes from the section heading: `### Jade` / `### Matthew` → individual, tagged to that person. `### Couple` → `owner_scope=shared`.
-- **Level** comes from the bar label: `need:` and/or `want:`. Both present = one goal with two bars. Drop the old `##### Needs` / `##### Wants` section headers — they can't express a both-bars goal; if present they're treated as cosmetic. **An item with no label at all defaults to `need`** — a bare commitment is a floor, not a stretch. An explicit label always wins (a stretch one-off is possible by writing `want:` on it).
+- **Level** comes from the bar label: `need:` and/or `want:` (aliases accepted since v0.9: `min:` = need, `stretch:` = want). Both present = one goal with two bars. Drop the old `##### Needs` / `##### Wants` section headers — they can't express a both-bars goal; if present they're treated as cosmetic. **An item with no label at all defaults to `need`** — a bare commitment is a floor, not a stretch. An explicit label always wins (a stretch one-off is possible by writing `want:` on it).
 - **A heading with discrete sub-items and no `need:`/`want:` line** is read as **N separate one-off goals** sharing the one `why` and a common tag (see §3.3). Ingestion confirms the split; each exploded one-off defaults to `level=need` (above).
 - **Cadence is parsed from natural phrasing.** Override only when you know it'll guess wrong:
   - `cadence: quota 3x/week` · `cadence: fixed Mon/Wed/Fri` · `cadence: interval 4d` · `cadence: rotation [upper, lower, rest]`
   - **`fixed_schedule` must name the days** (weekdays, or month dates) — that's what distinguishes it from `quota`.
   - `cadence: accumulation 4h/chapter` — cumulative target over the chapter (sums logged progress; done at target).
 - Other optional inline overrides: `completion: binary` · `paused` (dormant, not dropped) · `target: 2026-07-01` (one-off due date).
+- **`notes:`** (v0.9) — optional authored logistics/tactics ("set alarm regardless of bedtime"). Stored verbatim on `goal_version.notes` (written to all active versions, like `why`); kept out of the bar `definition` so the bot reads a clean bar.
 - **Rotation group (ADR-0016)** — goals that share one alternating rhythm keep their own blocks (own bars, own logging) plus ONE `rotate:` line anywhere in the section naming the cycle: `rotate: [pushups, rest, pull-ups, rest]`. Entries name goal titles (resolved to `gid`s at ingest) or `rest` (consumes one calendar day). Ingestion creates/updates the group; a goal in a group is scheduled *only* by the group. At rollover the group is re-created against the new chapter's fresh `gid`s (§5.5).
 ### 2.1 Shape
  
@@ -198,6 +200,7 @@ rotate: [pushups, rest, pull-ups, rest]
 | versioning (`version_no`, `effective_*`) | diff vs current | **sys** | §5. |
 | `goal_state.*` | — | **sys** | Runtime; seeded on create. |
 | `anticipated_obstacle.text` | `obstacles:` bullets | **T (optional)** | One verbatim row per bullet; written to all active versions; no coping parsing. |
+| `goal_version.notes` | `notes:` line | **T (optional)** | v0.9 (migration 0008). Verbatim; written to all active versions like `why`. Logistics, not the bar. |
 | `tag` / `goal_tag` | proposed from text + vocab | **C** | Always confirm — silent tagging drifts vocabulary; batched into one approval. |
 | `chapter.label` (theme) | optional after date header | **T (optional)** | |
 | `chapter.preamble` | free prose before the first `###` heading | **T (optional)** | Stored verbatim (§2.1). Theme/focus/parked domains; parked is chosen, never slippage — the bot must not nudge toward it. |
