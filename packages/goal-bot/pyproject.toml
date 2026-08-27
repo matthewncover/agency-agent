@@ -10,7 +10,7 @@ dependencies = [
     "profile",            # workspace dep (ADR-0014: goal-bot depends on profile)
     "task-tracker-mcp",   # workspace dep — published TaskQueryClient (ADR-0007)
     "fastmcp>=2.0",
-    "anthropic>=0.40",
+    "anthropic>=0.112",  # output_config.effort (Sonnet 5)
     "python-telegram-bot>=21",
     "apscheduler>=3.10,<4",
     "httpx>=0.27",        # heartbeat pinger (ADR-0017); already transitive via anthropic

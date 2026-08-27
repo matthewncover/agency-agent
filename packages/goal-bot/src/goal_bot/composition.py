@@ -74,6 +74,7 @@ def build_app(settings: Settings) -> App:
     llm = AnthropicLLMAdapter(
         api_key=settings.anthropic_api_key,
         model=settings.anthropic_model,
+        effort=settings.anthropic_effort,
     )
     _log.info("build_app: LLM adapter ready")
     turn = MorningTurn(llm=llm, uc=uc, tool_defs=RITUAL_TOOL_DEFS)

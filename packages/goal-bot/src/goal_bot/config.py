@@ -6,7 +6,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://agency:agency@localhost:5432/agency"
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-6"
+    anthropic_model: str = "claude-sonnet-5"
+    # Sonnet 5 runs adaptive thinking by default; effort controls how much it
+    # thinks/spends per turn. "medium" ≈ Sonnet 4.6 at its old default.
+    anthropic_effort: str = "medium"
     telegram_bot_token: str = ""
     telegram_chat_id: int = 0
     person_id: int = 0

@@ -4,18 +4,22 @@ from goal_bot.application.llm_port import LLMPort, LLMResponse, ToolCall
 
 
 class AnthropicLLMAdapter(LLMPort):
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, effort: str = "medium") -> None:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model
+        self._effort = effort
 
     def complete(
         self, system: str, messages: list[dict], tools: list[dict]
     ) -> LLMResponse:
+        # Sonnet 5 runs adaptive thinking by default and thinking shares the
+        # max_tokens budget — 1024 would risk a truncated reply after thinking.
         kwargs: dict = dict(
             model=self._model,
-            max_tokens=1024,
+            max_tokens=4096,
             system=system,
             messages=messages,
+            output_config={"effort": self._effort},
         )
         if tools:
             kwargs["tools"] = tools
