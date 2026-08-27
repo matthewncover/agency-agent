@@ -78,6 +78,9 @@ class GoalVersion(BaseModel):
     quantity_unit: str | None = None
     task_ref_source: TaskRefSource | None = None
     task_ref_id: int | None = None
+    # Authored logistics ("set alarm regardless of bedtime") kept out of the
+    # bar text; written to all active versions like `why` (goal-markdown §4).
+    notes: str | None = None
     effective_from: datetime | None = None
     effective_to: datetime | None = None
     lifecycle: VersionLifecycle = VersionLifecycle.ACTIVE

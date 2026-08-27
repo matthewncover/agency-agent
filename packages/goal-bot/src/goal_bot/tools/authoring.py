@@ -38,12 +38,14 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         obstacles: list[str] | None = None,
         task_ref_source: str | None = None,
         task_ref_id: int | None = None,
+        notes: str | None = None,
         lifecycle: str = "active",
     ) -> int:
         """Create a new version for an existing goal and return the version id.
 
         version_no is assigned by the server (per goal+level); a bar change is a
         new version, same goal id. `obstacles` are stored verbatim, one row each.
+        `notes` is authored logistics kept out of the bar text (stored verbatim).
         """
         return uc.create_goal_version(
             goal_id=goal_id,
@@ -58,6 +60,7 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
             obstacles=obstacles or [],
             task_ref_source=task_ref_source,
             task_ref_id=task_ref_id,
+            notes=notes,
             lifecycle=lifecycle,
         )
 
@@ -69,7 +72,7 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         Each goal: {title, chapter_id?, versions: [ {level, definition,
         recurrence_type, recurrence_config, completion_type, why?,
         target_quantity?, quantity_unit?, obstacles?, task_ref_source?,
-        task_ref_id?} ... ]}. Do NOT pass version_no (server-assigned).
+        task_ref_id?, notes?} ... ]}. Do NOT pass version_no (server-assigned).
         Returns [{gid, title, versions:[{level, version_id, version_no}]}] — use
         each gid for write-back. Handles explode-buckets and need+want pairs.
         """
@@ -80,7 +83,7 @@ def register_authoring_tools(mcp: FastMCP, uc: GoalUseCases) -> None:
         """Batch-add versions to EXISTING goals in ONE transaction (re-ingest bar
         changes). Each version: {goal_id, level, definition, recurrence_type,
         recurrence_config, completion_type, why?, target_quantity?,
-        quantity_unit?, obstacles?, task_ref_source?, task_ref_id?}. A bar change
+        quantity_unit?, obstacles?, task_ref_source?, task_ref_id?, notes?}. A bar change
         is a new version on the same goal_id (server closes the prior). Do NOT
         pass version_no. Returns the new version ids.
         """

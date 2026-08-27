@@ -78,6 +78,7 @@ goal_version = Table(
     Column("quantity_unit", Text),
     Column("task_ref_source", Text),
     Column("task_ref_id", Integer),
+    Column("notes", Text),
     Column(
         "effective_from",
         TIMESTAMP(timezone=True),
