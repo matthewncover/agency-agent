@@ -46,15 +46,29 @@ a move), set today's tz now and diarize the flip — it's a one-line SQL update
 
 ## 3. Wire Telegram (when the person actually starts)
 
-1. The person opens a chat with the bot and sends any message.
-2. Get the chat id: `curl https://api.telegram.org/bot<TOKEN>/getUpdates` →
-   `"chat":{"id":...}` (may be negative).
-3. In `/etc/agency-agent/agency.env` on the VPS, set the multi-person map —
-   it **replaces** the single-pair vars when present:
-   `TELEGRAM_CHAT_MAP=<chatid1>:<personid1>,<chatid2>:<personid2>`
-   (keep the existing person's pair in the map!).
-4. `sudo systemctl restart goal-bot`, then check the journal's
-   `chat→person map = {...}` line shows both entries.
+Two surfaces exist (ADR-0020):
+
+**Shared group chat (the normal goal surface).** The person joins the existing
+group chat; identity comes from the *speaker*, never the chat:
+
+1. Get their telegram user id: they DM `@userinfobot`, or send any message /
+   `/whoami` in the group chat and read the journal's
+   `auth rejected: known chat_id=..., unmapped user_id=...` line.
+2. In `/etc/agency-agent/agency.env` on the VPS, add them to **both** maps
+   (the chat map may repeat the same chat id; it **replaces** the single-pair
+   vars when present — keep existing entries!):
+   `TELEGRAM_CHAT_MAP=<groupchatid>:<pid1>,<groupchatid>:<pid2>`
+   `TELEGRAM_USER_MAP=<useruid1>:<pid1>,<useruid2>:<pid2>`
+3. `sudo systemctl restart goal-bot`, then check the journal's
+   `chat→person map = ..., user→person map = ...` line shows everyone.
+
+**Solo chat (legacy / special cases).** The person opens their own chat with
+the bot and sends a message; get the chat id from the unknown-chat journal
+line (or `getUpdates` while the bot is stopped — a running bot consumes
+updates) and add the single `<chatid>:<personid>` pair to the chat map.
+
+Unmapped speakers in a known chat are ignored, never attributed to someone
+else. Scheduled mornings into a shared chat are name-labeled per person.
 
 A person can exist and hold goals long before their Telegram wiring — goals
 ingest against their person id regardless.

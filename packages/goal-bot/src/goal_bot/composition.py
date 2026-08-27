@@ -89,11 +89,23 @@ def build_app(settings: Settings) -> App:
     _log.info("build_app: service ready")
 
     # Resolve the chat→person mapping (B7). One entry = the A7 single-user case;
-    # two = you + your partner, each keyed to their own chat + local morning.
+    # a chat appearing for several persons = a shared surface (B8), which needs
+    # the user map so identity comes from the speaker, never the chat.
     pairs = settings.chat_person_pairs()
-    chat_person = {chat_id: person_id for chat_id, person_id in pairs}
+    user_person = dict(settings.user_person_pairs())
     persons = {person_id: profiles.get_person(person_id) for _chat, person_id in pairs}
-    _log.info("build_app: chat→person map = %s", chat_person)
+    _log.info(
+        "build_app: chat→person map = %s, user→person map = %s", pairs, user_person
+    )
+    chat_counts: dict[int, int] = {}
+    for chat_id, _person in pairs:
+        chat_counts[chat_id] = chat_counts.get(chat_id, 0) + 1
+    if any(n > 1 for n in chat_counts.values()) and not user_person:
+        _log.warning(
+            "build_app: a chat is mapped to multiple persons but "
+            "TELEGRAM_USER_MAP is empty — every message in that chat will be "
+            "ignored until speakers are mapped"
+        )
 
     scheduler = AsyncIOScheduler()
     heartbeat = build_heartbeat(settings)
@@ -101,11 +113,12 @@ def build_app(settings: Settings) -> App:
     _log.info("build_app: building TelegramAdapter")
     telegram = TelegramAdapter(
         token=settings.telegram_bot_token,
-        chat_person=chat_person,
+        chat_person=pairs,
         persons=persons,
         service=service,
         scheduler=scheduler,
         heartbeat=heartbeat,
+        user_person=user_person,
     )
     _log.info("build_app: TelegramAdapter ready")
 

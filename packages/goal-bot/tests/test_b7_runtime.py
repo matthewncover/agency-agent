@@ -103,8 +103,9 @@ def _adapter():
 
 def test_message_routes_by_chat_to_the_right_person():
     a = _adapter()
-    assert a.person_for_chat(111) == 1
-    assert a.person_for_chat(222) == 2
+    # no user map configured → legacy chat routing, speaker irrelevant
+    assert a.person_for(111, user_id=555) == 1
+    assert a.person_for(222, user_id=555) == 2
     assert a.chat_for_person(1) == 111
     assert a.chat_for_person(2) == 222
 
@@ -113,7 +114,7 @@ def test_unknown_chat_is_not_a_member():
     a = _adapter()
     assert a.is_member(111) is True
     assert a.is_member(999) is False
-    assert a.person_for_chat(999) is None
+    assert a.person_for(999, user_id=555) is None
 
 
 def test_morning_job_targets_the_persons_own_chat():
@@ -146,8 +147,12 @@ def test_group_reply_to_someone_else_is_not_addressed():
 
 
 def test_group_mention_is_addressed_case_insensitive():
-    assert is_addressed("group", "@Goal_Bot did the thing", _BOT_USERNAME, _BOT_ID, None)
-    assert is_addressed("group", "did the thing @goal_bot", _BOT_USERNAME, _BOT_ID, None)
+    assert is_addressed(
+        "group", "@Goal_Bot did the thing", _BOT_USERNAME, _BOT_ID, None
+    )
+    assert is_addressed(
+        "group", "did the thing @goal_bot", _BOT_USERNAME, _BOT_ID, None
+    )
 
 
 def test_group_mention_of_similar_username_is_not_addressed():

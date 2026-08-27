@@ -22,5 +22,6 @@ The entry point for decisions: read this to find the right ADR, never the raw di
 | [0017](0017-liveness-heartbeat.md) | Liveness heartbeat — an external dead-man's switch watches the system's promise to show up | Accepted | — | — |
 | [0018](0018-private-tasks.md) | Private personal tasks are invisible outside the personal tracker; sharing is decided by which server a bot mounts | Accepted | — | — |
 | [0019](0019-personal-only-task-tracker.md) | Task-tracker is personal-only — work tasks, time entries, and sprints leave the system | Accepted | [ADR-0005](0005-goals-reference-tasks.md) (amends) | — |
+| [0020](0020-shared-chat-speaker-routing.md) | The shared group chat is the goal surface; identity routes by speaker, never by chat | Accepted | — | — |
 
 > ADRs 0001–0003 are referenced in project history (see the prior combined-bundle index and `doc/process/meta-plan.md`) but were not part of the split bundle; no per-file ADR bodies exist for them yet.
