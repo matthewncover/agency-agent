@@ -7,7 +7,6 @@ from task_tracker.domain.entities import (
     DailyLogEntity,
     PersonalTaskEntity,
     PersonalTaskStatus,
-    WorkTaskEntity,
 )
 from task_tracker.infrastructure.adapters import (
     PgDailyLogRepositoryAdapter,
@@ -29,12 +28,6 @@ class TestGetPersonalCandidates:
         candidates = query_client.get_personal_candidates(person_id)
         titles = {c.title for c in candidates}
         assert titles == {"T2", "T3"}  # tier 1 excluded, done excluded
-
-    def test_excludes_work_tasks(self, task_repo, query_client, person_id):
-        task_repo.create_work_task(WorkTaskEntity(title="Work thing"))
-        task_repo.create_personal_task(PersonalTaskEntity(title="Personal", tier=2))
-        candidates = query_client.get_personal_candidates(person_id)
-        assert [c.title for c in candidates] == ["Personal"]
 
     def test_excludes_other_owners(
         self, migrated_engine, query_client, person_id, other_person_id
@@ -74,12 +67,6 @@ class TestGetTaskStatus:
         assert status.title == "Ref me"
         assert status.is_deleted is False
 
-    def test_work(self, task_repo, query_client, person_id):
-        created = task_repo.create_work_task(WorkTaskEntity(title="Work ref"))
-        status = query_client.get_task_status("work", created.id, person_id)
-        assert status is not None
-        assert status.source == "work"
-
     def test_missing_returns_none(self, query_client, person_id):
         assert query_client.get_task_status("personal", 99999, person_id) is None
 
@@ -95,8 +82,10 @@ class TestGetTaskStatus:
         )
 
     def test_invalid_source_raises(self, query_client, person_id):
-        with pytest.raises(ValueError):
-            query_client.get_task_status("bogus", 1, person_id)
+        # 'work' is invalid too since ADR-0019 — the tracker is personal-only.
+        for source in ("bogus", "work"):
+            with pytest.raises(ValueError):
+                query_client.get_task_status(source, 1, person_id)
 
     def test_private_returns_none(self, task_repo, query_client, person_id):
         # Private is deliberately indistinguishable from missing (ADR-0018).

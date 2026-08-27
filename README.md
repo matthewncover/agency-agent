@@ -5,7 +5,7 @@
 A monorepo of personal agency tooling — **AI agents in service of personal agency**: systems for planning, tracking, and reflecting on the stuff of life — tasks, time, and goals. The packages share an identity primitive and a Postgres database, but they are separate tools used in separate contexts:
 
 - **[goal-bot](packages/goal-bot/)** — the flagship: a goal accountability system that lives in Telegram group chats as a morning check-in. Most of this README (and most of [doc/](doc/)) is about it.
-- **[task-tracker](packages/task-tracker/)** — an MCP server for task, sprint, time, and daily-log tracking, used on its own through the Claude UI (wired into a Claude Project). Goal-bot consumes it through a typed read-only client, but nothing about it requires goal-bot.
+- **[task-tracker](packages/task-tracker/)** — an MCP server for personal task and daily-log tracking (personal-only since ADR-0019), used on its own through the Claude UI (wired into a Claude Project). Goal-bot consumes it through a typed read-only client, but nothing about it requires goal-bot.
 - **[profile](packages/profile/)** — the shared identity primitive (person + group supertype, so joint ownership is ordinary ownership) and the human-authored Tier-1 profile that other packages read.
 
 Everything below describes **goal-bot** unless noted.
@@ -62,7 +62,7 @@ Three Python packages, one shared Postgres database as the source of truth (one 
 
 - [packages/profile/](packages/profile/) — identity supertype and the Tier-1 authored profile.
 - [packages/goal-bot/](packages/goal-bot/) — the goal domain: chapters, versioned goals, daily plans, the morning ritual assembly, Tier-2/3 memory, and the goal-markdown ingestion MCP.
-- [packages/task-tracker/](packages/task-tracker/) — standalone task/sprint/time/daily-log MCP server; supplies goal-bot the heavy-day daily signal and goal candidates at chapter-setting time via a typed read-only client.
+- [packages/task-tracker/](packages/task-tracker/) — standalone personal task + daily-log MCP server; supplies goal-bot the heavy-day daily signal and goal candidates at chapter-setting time via a typed read-only client.
 
 Cross-package access goes through published ports, never raw cross-schema SQL. Migrations are append-only Alembic revisions in [migrations/](migrations/). Design decisions are recorded as append-only ADRs — start at [doc/adr/INDEX.md](doc/adr/INDEX.md).
 

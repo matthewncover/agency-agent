@@ -47,22 +47,18 @@ class PgTaskQueryClient(TaskQueryClient):
     def get_task_status(
         self, source: str, task_id: int, owner_id: int
     ) -> TaskStatus | None:
-        if source == "personal":
-            tbl = t.personal_tasks
-        elif source == "work":
-            tbl = t.work_tasks
-        else:
+        if source != "personal":
             raise ValueError(f"Invalid task source: {source!r}")
+        tbl = t.personal_tasks
 
         stmt = (
             select(tbl.c.id, tbl.c.title, tbl.c.status, tbl.c.deleted_at)
             .where(tbl.c.id == task_id)
             .where(tbl.c.owner_id == owner_id)
+            # Private tasks are invisible to goal-bot (ADR-0018): the answer
+            # is the same None as "doesn't exist", by design.
+            .where(tbl.c.private.is_(False))
         )
-        # Private personal tasks are invisible to goal-bot (ADR-0018): the
-        # answer is the same None as "doesn't exist", by design.
-        if tbl is t.personal_tasks:
-            stmt = stmt.where(tbl.c.private.is_(False))
         with self._engine.connect() as c:
             row = c.execute(stmt).one_or_none()
         if row is None:

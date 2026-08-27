@@ -12,10 +12,7 @@ from datetime import datetime
 from task_tracker.domain.entities import (
     DailyLogEntity,
     PersonalTaskEntity,
-    SprintEntity,
     SystemMetaEntity,
-    TimeEntryEntity,
-    WorkTaskEntity,
 )
 
 _DONE_STATES = ("done", "nuked")
@@ -47,24 +44,10 @@ def _days_carried(created_at: datetime | None, status: str) -> int | None:
     return (datetime.now() - created_at).days
 
 
-def row_to_work_task(row) -> WorkTaskEntity:
-    d = _prep(row)
-    d["days_carried"] = _days_carried(d.get("created_at"), d["status"])
-    return WorkTaskEntity(**d)
-
-
 def row_to_personal_task(row) -> PersonalTaskEntity:
     d = _prep(row)
     d["days_carried"] = _days_carried(d.get("created_at"), d["status"])
     return PersonalTaskEntity(**d)
-
-
-def row_to_time_entry(row) -> TimeEntryEntity:
-    return TimeEntryEntity(**_prep(row))
-
-
-def row_to_sprint(row) -> SprintEntity:
-    return SprintEntity(**dict(row._mapping))
 
 
 def row_to_daily_log(row) -> DailyLogEntity:

@@ -7,10 +7,8 @@ from sqlalchemy import text
 
 from task_tracker.infrastructure.adapters import (
     PgDailyLogRepositoryAdapter,
-    PgSprintRepositoryAdapter,
     PgSystemMetaRepositoryAdapter,
     PgTaskRepositoryAdapter,
-    PgTimeEntryRepositoryAdapter,
 )
 from task_tracker.infrastructure.task_query_client import PgTaskQueryClient
 
@@ -25,9 +23,8 @@ def _clean_db(migrated_engine):
         c.execute(
             text(
                 "TRUNCATE "
-                "tasktracker.time_entries, tasktracker.daily_logs, "
-                "tasktracker.work_tasks, tasktracker.personal_tasks, "
-                "tasktracker.sprints, tasktracker.system_meta, "
+                "tasktracker.daily_logs, tasktracker.personal_tasks, "
+                "tasktracker.system_meta, "
                 "profile.profile_doc, profile.group_member, "
                 "profile.group_profile, profile.person, profile.profile "
                 "RESTART IDENTITY CASCADE"
@@ -54,16 +51,6 @@ def other_person_id(migrated_engine):
 @pytest.fixture
 def task_repo(migrated_engine, person_id):
     return PgTaskRepositoryAdapter(migrated_engine, person_id)
-
-
-@pytest.fixture
-def time_entry_repo(migrated_engine):
-    return PgTimeEntryRepositoryAdapter(migrated_engine)
-
-
-@pytest.fixture
-def sprint_repo(migrated_engine):
-    return PgSprintRepositoryAdapter(migrated_engine)
 
 
 @pytest.fixture

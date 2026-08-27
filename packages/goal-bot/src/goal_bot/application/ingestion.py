@@ -78,9 +78,9 @@ class IngestionUseCases:
     # --- candidate-gathering (B2.1) ---
 
     def propose_candidates(self, owner: int) -> dict:
-        """Past goals ∪ open tier-2/3 personal tasks for the owner. `work_tasks`
-        are structurally excluded (no work goals, ADR-0005) — the client never
-        returns them."""
+        """Past goals ∪ open tier-2/3 personal tasks for the owner. The tracker
+        is personal-only (ADR-0019); private tasks are excluded by the client
+        (ADR-0018)."""
         past = [
             {
                 "gid": g.id,

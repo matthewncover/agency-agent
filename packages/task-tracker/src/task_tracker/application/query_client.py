@@ -14,10 +14,13 @@ from task_tracker.domain.entities import PersonalTaskEntity
 
 
 class TaskStatus(BaseModel):
-    """Status of a referenced task, for one-off goals' `task_ref` (ADR-0005)."""
+    """Status of a referenced task, for one-off goals' `task_ref` (ADR-0005).
+
+    `source` mirrors goal_version.task_ref_source; since ADR-0019 the only
+    valid value is 'personal'."""
 
     id: int
-    source: str  # 'personal' | 'work'
+    source: str  # 'personal'
     title: str
     status: str
     is_deleted: bool
@@ -39,17 +42,17 @@ class TaskQueryClient(ABC):
         self, owner_id: int, tiers: tuple[int, ...] = (2, 3)
     ) -> list[PersonalTaskEntity]:
         """Open, non-deleted, non-private personal tasks in the given tiers,
-        for goal-setting candidate-gathering. `work_tasks` are never candidates
-        (no work goals, ADR-0005); private tasks are never candidates
-        (ADR-0018)."""
+        for goal-setting candidate-gathering. Private tasks are never
+        candidates (ADR-0018). The tracker is personal-only (ADR-0019)."""
 
     @abstractmethod
     def get_task_status(
         self, source: str, task_id: int, owner_id: int
     ) -> TaskStatus | None:
-        """Status of one referenced task (`source` ∈ {'personal','work'}) owned
-        by `owner_id`, or None if it doesn't exist / isn't theirs / is private
-        (ADR-0018 — private is deliberately indistinguishable from missing).
+        """Status of one referenced task (`source` must be 'personal' — the
+        work source left with ADR-0019) owned by `owner_id`, or None if it
+        doesn't exist / isn't theirs / is private (ADR-0018 — private is
+        deliberately indistinguishable from missing).
 
         None is a NO-SIGNAL answer: callers must treat it as "say nothing",
         never as evidence the task was completed, dropped, or removed. A live

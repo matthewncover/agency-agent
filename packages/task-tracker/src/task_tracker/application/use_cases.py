@@ -2,89 +2,49 @@ from datetime import date, datetime, timedelta
 
 from task_tracker.application.ports import (
     DailyLogRepositoryPort,
-    SprintRepositoryPort,
     SystemMetaRepositoryPort,
     TaskRepositoryPort,
-    TimeEntryRepositoryPort,
 )
 from task_tracker.domain.entities import (
     DailyLogEntity,
-    JnBucket,
     PersonalTaskEntity,
-    SprintEntity,
-    SprintStatus,
     SystemMetaEntity,
-    TimeEntryEntity,
-    WorkTaskEntity,
 )
-from task_tracker.domain.factories import PersonalTaskFactory, WorkTaskFactory
+from task_tracker.domain.factories import PersonalTaskFactory
 
 
 class CreateTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(self, task_type: str, **fields) -> WorkTaskEntity | PersonalTaskEntity:
-        if task_type == "work":
-            task = WorkTaskFactory.create(**fields)
-            return self._task_repo.create_work_task(task)
-        elif task_type == "personal":
-            task = PersonalTaskFactory.create(**fields)
-            return self._task_repo.create_personal_task(task)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, **fields) -> PersonalTaskEntity:
+        task = PersonalTaskFactory.create(**fields)
+        return self._task_repo.create_personal_task(task)
 
 
 class CreateTasksUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(self, tasks: list[dict]) -> list[WorkTaskEntity | PersonalTaskEntity]:
-        results = []
+    def execute(self, tasks: list[dict]) -> list[PersonalTaskEntity]:
         create = CreateTaskUseCase(self._task_repo)
-        for task_data in tasks:
-            task_type = task_data.pop("type")
-            results.append(create.execute(task_type, **task_data))
-        return results
+        return [create.execute(**task_data) for task_data in tasks]
 
 
 class GetTaskDetailUseCase:
-    def __init__(
-        self,
-        task_repo: TaskRepositoryPort,
-        time_entry_repo: TimeEntryRepositoryPort,
-    ):
+    def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
-        self._time_entry_repo = time_entry_repo
 
-    def execute(
-        self, task_id: int, task_type: str
-    ) -> WorkTaskEntity | PersonalTaskEntity | None:
-        if task_type == "work":
-            task = self._task_repo.get_work_task(task_id)
-            if task:
-                task.actual_hours = self._time_entry_repo.get_actual_hours(task_id)
-                self._compute_days_carried(task)
-                for child in task.children:
-                    child.actual_hours = self._time_entry_repo.get_actual_hours(
-                        child.id
-                    )
-                    self._compute_days_carried(child)
-            return task
-        elif task_type == "personal":
-            task = self._task_repo.get_personal_task(task_id)
-            if task:
-                self._compute_days_carried(task)
-                for child in task.children:
-                    self._compute_days_carried(child)
-            return task
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, task_id: int) -> PersonalTaskEntity | None:
+        task = self._task_repo.get_personal_task(task_id)
+        if task:
+            self._compute_days_carried(task)
+            for child in task.children:
+                self._compute_days_carried(child)
+        return task
 
     @staticmethod
-    def _compute_days_carried(
-        task: WorkTaskEntity | PersonalTaskEntity,
-    ) -> None:
+    def _compute_days_carried(task: PersonalTaskEntity) -> None:
         if task.created_at and task.status not in ("done", "nuked"):
             delta = datetime.now() - task.created_at
             task.days_carried = delta.days
@@ -96,30 +56,20 @@ class UpdateTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self, task_id: int, task_type: str, **fields
-    ) -> WorkTaskEntity | PersonalTaskEntity | None:
-        if task_type == "work":
-            return self._task_repo.update_work_task(task_id, fields)
-        elif task_type == "personal":
-            return self._task_repo.update_personal_task(task_id, fields)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, task_id: int, **fields) -> PersonalTaskEntity | None:
+        return self._task_repo.update_personal_task(task_id, fields)
 
 
 class BatchUpdateTasksUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self, updates: list[dict]
-    ) -> list[WorkTaskEntity | PersonalTaskEntity | None]:
+    def execute(self, updates: list[dict]) -> list[PersonalTaskEntity | None]:
         results = []
         update = UpdateTaskUseCase(self._task_repo)
         for item in updates:
             task_id = item.pop("id")
-            task_type = item.pop("type")
-            results.append(update.execute(task_id, task_type, **item))
+            results.append(update.execute(task_id, **item))
         return results
 
 
@@ -127,63 +77,36 @@ class CompleteTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self, task_id: int, task_type: str
-    ) -> WorkTaskEntity | PersonalTaskEntity | None:
+    def execute(self, task_id: int) -> PersonalTaskEntity | None:
         fields = {
             "status": "done",
             "completed_at": datetime.now(),
         }
-        if task_type == "work":
-            return self._task_repo.update_work_task(task_id, fields)
-        elif task_type == "personal":
-            return self._task_repo.update_personal_task(task_id, fields)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+        return self._task_repo.update_personal_task(task_id, fields)
 
 
 class NukeTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self, task_id: int, task_type: str
-    ) -> WorkTaskEntity | PersonalTaskEntity | None:
-        fields = {"status": "nuked"}
-        if task_type == "work":
-            return self._task_repo.update_work_task(task_id, fields)
-        elif task_type == "personal":
-            return self._task_repo.update_personal_task(task_id, fields)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, task_id: int) -> PersonalTaskEntity | None:
+        return self._task_repo.update_personal_task(task_id, {"status": "nuked"})
 
 
 class DeleteTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(self, task_id: int, task_type: str) -> bool:
-        if task_type == "work":
-            return self._task_repo.soft_delete_work_task(task_id)
-        elif task_type == "personal":
-            return self._task_repo.soft_delete_personal_task(task_id)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, task_id: int) -> bool:
+        return self._task_repo.soft_delete_personal_task(task_id)
 
 
 class RestoreTaskUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self, task_id: int, task_type: str
-    ) -> WorkTaskEntity | PersonalTaskEntity | None:
-        if task_type == "work":
-            return self._task_repo.restore_work_task(task_id)
-        elif task_type == "personal":
-            return self._task_repo.restore_personal_task(task_id)
-        else:
-            raise ValueError(f"Invalid task type: {task_type}")
+    def execute(self, task_id: int) -> PersonalTaskEntity | None:
+        return self._task_repo.restore_personal_task(task_id)
 
 
 class SearchTasksUseCase:
@@ -200,87 +123,19 @@ class SearchTasksUseCase:
         return self._task_repo.search_tasks(query, include_done, include_deleted, limit)
 
 
-class GetEstimationAccuracyUseCase:
-    def __init__(self, task_repo: TaskRepositoryPort):
-        self._task_repo = task_repo
-
-    def execute(self, n: int | None = None, task_type: str | None = None) -> dict:
-        rows = self._task_repo.get_estimation_data(n, task_type)
-        tasks = []
-        ratios = []
-        for row in rows:
-            estimate = row["estimate_hours"]
-            actual = row["actual_hours"]
-            ratio = round(actual / estimate, 2) if estimate else None
-            if ratio is not None:
-                ratios.append(ratio)
-            tasks.append(
-                {
-                    "id": row["id"],
-                    "title": row["title"],
-                    "estimate_hours": estimate,
-                    "actual_hours": actual,
-                    "ratio": ratio,
-                }
-            )
-        return {"tasks": tasks, "median_ratio": _median(ratios)}
-
-
-def _median(values: list[float]) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    mid = len(ordered) // 2
-    if len(ordered) % 2:
-        return ordered[mid]
-    return round((ordered[mid - 1] + ordered[mid]) / 2, 2)
-
-
 class GetOpenTasksUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(
-        self,
-        task_type: str = "all",
-        min_days_open: int | None = None,
-    ) -> dict[str, list]:
-        result: dict[str, list] = {}
-        if task_type in ("work", "all"):
-            result["work"] = self._task_repo.get_open_work_tasks(min_days_open)
-        if task_type in ("personal", "all"):
-            result["personal"] = self._task_repo.get_open_personal_tasks(min_days_open)
-        return result
-
-
-class GetSprintTasksUseCase:
-    def __init__(
-        self,
-        task_repo: TaskRepositoryPort,
-        time_entry_repo: TimeEntryRepositoryPort,
-        sprint_repo: SprintRepositoryPort,
-    ):
-        self._task_repo = task_repo
-        self._time_entry_repo = time_entry_repo
-        self._sprint_repo = sprint_repo
-
-    def execute(self, sprint_id: str | None = None) -> list[WorkTaskEntity]:
-        if sprint_id is None:
-            active = self._sprint_repo.get_active()
-            if active is None:
-                return []
-            sprint_id = active.id
-        tasks = self._task_repo.get_sprint_tasks(sprint_id)
-        for task in tasks:
-            task.actual_hours = self._time_entry_repo.get_actual_hours(task.id)
-        return tasks
+    def execute(self, min_days_open: int | None = None) -> list[PersonalTaskEntity]:
+        return self._task_repo.get_open_personal_tasks(min_days_open)
 
 
 class GetTasksUpdatedOnUseCase:
     def __init__(self, task_repo: TaskRepositoryPort):
         self._task_repo = task_repo
 
-    def execute(self, target_date: date) -> dict[str, list]:
+    def execute(self, target_date: date) -> list[PersonalTaskEntity]:
         return self._task_repo.get_tasks_updated_on(target_date)
 
 
@@ -288,35 +143,19 @@ class GetTrackerDataUseCase:
     def __init__(
         self,
         task_repo: TaskRepositoryPort,
-        time_entry_repo: TimeEntryRepositoryPort,
-        sprint_repo: SprintRepositoryPort,
         daily_log_repo: DailyLogRepositoryPort,
         system_meta_repo: SystemMetaRepositoryPort,
     ):
         self._task_repo = task_repo
-        self._time_entry_repo = time_entry_repo
-        self._sprint_repo = sprint_repo
         self._daily_log_repo = daily_log_repo
         self._system_meta_repo = system_meta_repo
 
     def execute(self) -> dict:
         today = date.today()
 
-        # Open work tasks with annotations
-        work_tasks = self._task_repo.get_open_work_tasks()
-        self._annotate_tasks(work_tasks, today)
-
         # Open personal tasks with annotations
         personal_tasks = self._task_repo.get_open_personal_tasks()
         self._annotate_tasks(personal_tasks, today)
-
-        # Active sprint + sprint tasks
-        active_sprint = self._sprint_repo.get_active()
-        sprint_tasks = []
-        if active_sprint:
-            sprint_tasks = self._task_repo.get_sprint_tasks(active_sprint.id)
-            for t in sprint_tasks:
-                t.actual_hours = self._time_entry_repo.get_actual_hours(t.id)
 
         # Today's daily log
         daily_log = self._daily_log_repo.get(today)
@@ -330,12 +169,7 @@ class GetTrackerDataUseCase:
             tier3_review_due = (today - last_review).days >= 90
 
         return {
-            "work": [t.model_dump() for t in work_tasks],
             "personal": [t.model_dump() for t in personal_tasks],
-            "sprint": {
-                "info": active_sprint.model_dump() if active_sprint else None,
-                "tasks": [t.model_dump() for t in sprint_tasks],
-            },
             "daily_log": daily_log.model_dump() if daily_log else None,
             "tier3_review_due": tier3_review_due,
         }
@@ -357,52 +191,6 @@ class GetTrackerDataUseCase:
                     child.deadline is not None
                     and child.deadline <= today + timedelta(days=3)
                 )
-
-
-class LogTimeUseCase:
-    def __init__(self, time_entry_repo: TimeEntryRepositoryPort):
-        self._time_entry_repo = time_entry_repo
-
-    def execute(
-        self,
-        work_task_id: int,
-        entry_date: date,
-        duration_minutes: int,
-        jn_bucket: JnBucket,
-        notes: str | None = None,
-    ) -> TimeEntryEntity:
-        entry = TimeEntryEntity(
-            work_task_id=work_task_id,
-            date=entry_date,
-            duration_minutes=duration_minutes,
-            jn_bucket=jn_bucket,
-            notes=notes,
-        )
-        return self._time_entry_repo.create(entry)
-
-
-class DeleteTimeEntryUseCase:
-    def __init__(self, time_entry_repo: TimeEntryRepositoryPort):
-        self._time_entry_repo = time_entry_repo
-
-    def execute(self, time_entry_id: int) -> TimeEntryEntity | None:
-        return self._time_entry_repo.delete(time_entry_id)
-
-
-class GetTimecardUseCase:
-    def __init__(self, time_entry_repo: TimeEntryRepositoryPort):
-        self._time_entry_repo = time_entry_repo
-
-    def execute(self, start_date: date, end_date: date) -> list[dict]:
-        return self._time_entry_repo.get_timecard(start_date, end_date)
-
-
-class GetTimeGapsUseCase:
-    def __init__(self, time_entry_repo: TimeEntryRepositoryPort):
-        self._time_entry_repo = time_entry_repo
-
-    def execute(self, start_date: date, end_date: date) -> list[dict]:
-        return self._time_entry_repo.get_time_gaps(start_date, end_date)
 
 
 class LogDailyUseCase:
@@ -451,34 +239,6 @@ class GetDailyLogsUseCase:
 
     def execute(self, start_date: date, end_date: date) -> list[DailyLogEntity]:
         return self._daily_log_repo.get_range(start_date, end_date)
-
-
-class SetActiveSprintUseCase:
-    def __init__(self, sprint_repo: SprintRepositoryPort):
-        self._sprint_repo = sprint_repo
-
-    def execute(
-        self,
-        sprint_id: str,
-        start_date: date | None = None,
-        end_date: date | None = None,
-    ) -> SprintEntity:
-        existing = self._sprint_repo.get(sprint_id)
-        if existing:
-            self._sprint_repo.deactivate_all()
-            existing.status = SprintStatus.ACTIVE
-            return self._sprint_repo.create_or_update(existing)
-        else:
-            if start_date is None or end_date is None:
-                raise ValueError("start_date and end_date required for new sprints")
-            self._sprint_repo.deactivate_all()
-            sprint = SprintEntity(
-                id=sprint_id,
-                start_date=start_date,
-                end_date=end_date,
-                status=SprintStatus.ACTIVE,
-            )
-            return self._sprint_repo.create_or_update(sprint)
 
 
 class SetMetaUseCase:

@@ -59,8 +59,7 @@ class TestPrivateFilteringAdapter:
         assert titles == ["Public gift list"]
 
     def test_updated_on_hides_private(self, shared_repo, secret_task):
-        result = shared_repo.get_tasks_updated_on(date.today())
-        assert result["personal"] == []
+        assert shared_repo.get_tasks_updated_on(date.today()) == []
 
 
 class TestCreateSharedApp:
@@ -73,7 +72,7 @@ class TestCreateSharedApp:
     ):
         task_repo.create_personal_task(PersonalTaskEntity(title="Public", tier=2))
         _, tools = create_shared_app(migrated_engine, person_id)
-        open_tasks = tools["get_open_tasks"](type="personal")
-        titles = [t["title"] for t in open_tasks["personal"]]
+        open_tasks = tools["get_open_tasks"]()
+        titles = [t["title"] for t in open_tasks]
         assert titles == ["Public"]
-        assert tools["get_task_detail"](id=secret_task.id, type="personal") is None
+        assert tools["get_task_detail"](id=secret_task.id) is None

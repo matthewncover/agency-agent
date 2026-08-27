@@ -32,8 +32,7 @@ def register(mcp, repos):
         description=(
             "Get the current date and time. Use at the start of any session to "
             "orient on today's date, day of week, and timezone. Essential for "
-            "date-sensitive operations like sprint boundaries, deadlines, and "
-            "daily log entries."
+            "date-sensitive operations like deadlines and daily log entries."
         )
     )
     def get_time(timezone: str | None = None) -> dict:

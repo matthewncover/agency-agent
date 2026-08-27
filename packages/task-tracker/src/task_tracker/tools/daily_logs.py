@@ -113,8 +113,8 @@ def register(mcp, repos):
     @mcp.tool(
         description=(
             "Get daily logs across a date range. Use for pattern analysis — "
-            "whoop-to-output correlation, distraction windows, estimation "
-            "accuracy, reactive vs. proactive balance over time."
+            "whoop-to-output correlation, distraction windows, reactive vs. "
+            "proactive balance over time."
         )
     )
     def get_daily_logs(start_date: str, end_date: str) -> list[dict]:

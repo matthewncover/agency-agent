@@ -1,7 +1,9 @@
 # Task Tracker MCP Server
 
-Personal productivity MCP server exposing task and time tracking tools
-for a Claude Project. Postgres, clean architecture, Python.
+Personal productivity MCP server exposing personal task and daily-log
+tracking tools for a Claude Project (personal-only — no work tasks,
+sprints, or time tracking; ADR-0019). Postgres, clean architecture,
+Python.
 
 ## Spec
 
@@ -19,8 +21,8 @@ ruff format .             # format
 ## Testing
 
 Write and run tests during development. Cover entity validation,
-use case logic (especially computed fields like days_carried and
-actual_hours), repository CRUD against test SQLite, and tool-level
+use case logic (especially computed fields like days_carried),
+repository CRUD against the test Postgres, and tool-level
 integration.
 
 ## Style

@@ -213,21 +213,12 @@ def test_propose_candidates_past_goals_and_personal_tasks(
                 status="not_started",
             )
         )
-        c.execute(
-            insert(tt.work_tasks).values(
-                owner_id=person_id,
-                title="work thing",
-                status="not_started",
-            )
-        )
-
     result = iuc.propose_candidates(person_id)
 
     assert "an old goal" in {g["title"] for g in result["goals"]}
     task_titles = {t["title"] for t in result["tasks"]}
     assert "tier-2 personal" in task_titles
     assert "tier-4 personal" not in task_titles  # out of tier
-    assert "work thing" not in task_titles  # work tasks are never candidates
 
 
 # ── soft invariant (group goal in a private chapter) ─────────────────────────

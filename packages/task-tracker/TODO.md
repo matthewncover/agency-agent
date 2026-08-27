@@ -13,8 +13,8 @@ Graduate to SQLite **FTS5** when the done/deleted history grows large enough tha
 the linear scan or the lack of relevance ranking starts to matter:
 
 - FTS5 external-content (or contentless) virtual table over `title` + `notes`.
-- `INSERT`/`UPDATE`/`DELETE` triggers on `work_tasks` and `personal_tasks` to keep
-  the index synced.
+- `INSERT`/`UPDATE`/`DELETE` triggers on `personal_tasks` to keep the index
+  synced.
 - Swap the adapter query to `MATCH` + `bm25()` ranking; the tool/use-case/port
   signatures stay the same, so this is an infrastructure-only change.
 

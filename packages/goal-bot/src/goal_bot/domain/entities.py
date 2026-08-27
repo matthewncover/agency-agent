@@ -40,8 +40,8 @@ class PlanItemStatus(StrEnum):
 
 
 class TaskRefSource(StrEnum):
+    # 'work' left with ADR-0019 — the tracker (and thus refs) is personal-only.
     PERSONAL = "personal"
-    WORK = "work"
 
 
 class Chapter(BaseModel):

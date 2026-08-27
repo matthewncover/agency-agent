@@ -4,30 +4,6 @@ from pathlib import Path
 DEFAULT_DB_PATH = Path.home() / "dev" / "task-tracker-mcp" / ".db" / "tasks.db"
 
 SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS work_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    ods_ticket TEXT,
-    sprint_id TEXT,
-    commitment_level TEXT,
-    jn_bucket TEXT,
-    status TEXT NOT NULL DEFAULT 'not_started',
-    blocked_reason TEXT,
-    estimate_hours REAL,
-    deadline DATE,
-    parent_task_id INTEGER,
-    is_commitment BOOLEAN NOT NULL DEFAULT 0,
-    commitment_notes TEXT,
-    priority_rank INTEGER,
-    notes TEXT,
-    created_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime')),
-    completed_at DATETIME,
-    deleted_at DATETIME,
-    FOREIGN KEY (parent_task_id) REFERENCES work_tasks(id),
-    FOREIGN KEY (sprint_id) REFERENCES sprints(id)
-);
-
 CREATE TABLE IF NOT EXISTS personal_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -47,25 +23,6 @@ CREATE TABLE IF NOT EXISTS personal_tasks (
     completed_at DATETIME,
     deleted_at DATETIME,
     FOREIGN KEY (parent_task_id) REFERENCES personal_tasks(id)
-);
-
-CREATE TABLE IF NOT EXISTS time_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    work_task_id INTEGER NOT NULL,
-    date DATE NOT NULL,
-    duration_minutes INTEGER NOT NULL,
-    jn_bucket TEXT NOT NULL,
-    notes TEXT,
-    created_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (work_task_id) REFERENCES work_tasks(id)
-);
-
-CREATE TABLE IF NOT EXISTS sprints (
-    id TEXT PRIMARY KEY,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS daily_logs (
@@ -89,15 +46,6 @@ CREATE TABLE IF NOT EXISTS system_meta (
     value TEXT NOT NULL,
     updated_at DATETIME NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
-
-CREATE TRIGGER IF NOT EXISTS work_tasks_updated_at
-    AFTER UPDATE ON work_tasks
-    FOR EACH ROW
-BEGIN
-    UPDATE work_tasks
-        SET updated_at = datetime('now', 'localtime')
-        WHERE id = NEW.id;
-END;
 
 CREATE TRIGGER IF NOT EXISTS personal_tasks_updated_at
     AFTER UPDATE ON personal_tasks
