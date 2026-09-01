@@ -40,6 +40,14 @@ def is_addressed(
     return bool(re.search(rf"@{re.escape(bot_username)}\b", text, re.IGNORECASE))
 
 
+def command_payload(text: str) -> str:
+    """Everything after the /command token itself (handles /cmd@botname),
+    whitespace-trimmed, newlines preserved — a visualization is often
+    multi-line and context.args would flatten it."""
+    parts = text.split(maxsplit=1)
+    return parts[1].strip() if len(parts) > 1 else ""
+
+
 def strip_mention(text: str, bot_username: str) -> str:
     """Remove @mentions of the bot so downstream sees the message itself."""
     return re.sub(
@@ -92,6 +100,7 @@ class TelegramAdapter:
             builder = builder.post_init(_start_scheduler)
         self._app = builder.build()
         self._app.add_handler(CommandHandler("morning", self._cmd_morning))
+        self._app.add_handler(CommandHandler("visualize", self._cmd_visualize))
         self._app.add_handler(CommandHandler("whoami", self._cmd_whoami))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text)
@@ -153,6 +162,30 @@ class TelegramAdapter:
         if session.response_text:
             await update.message.reply_text(session.response_text)
             transcript.log_message(chat_id, person_id, "out", session.response_text)
+
+    async def _cmd_visualize(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Capture a before-bed visualization; it comes back at the next
+        morning fire in the person's own words. Free text, no structure —
+        friction stays flat (non-negotiable 8)."""
+        person_id = self._auth(update)
+        if person_id is None:
+            return
+        chat_id = update.effective_chat.id
+        text = command_payload(update.message.text or "")
+        transcript.log_message(chat_id, person_id, "in", update.message.text or "")
+        if not text:
+            reply = (
+                "Write the picture right after the command and I'll hold it "
+                "for the morning — e.g. /visualize tomorrow I want to ..."
+            )
+        elif self._service.record_visualization(person_id, text):
+            reply = "Got it — I'll bring this back to you in the morning."
+        else:
+            reply = "I can't store visualizations right now (no store wired)."
+        await update.message.reply_text(reply)
+        transcript.log_message(chat_id, person_id, "out", reply)
 
     async def _handle_text(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

@@ -9,7 +9,24 @@
       "Edit(/.claude/skills/ingest-goals/**)",
       "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -P pager=off -c ' *)",
       "Bash(docker exec agency-agent-postgres-1 psql -U agency -d agency -P pager=off -x -c ' *)",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "mcp__task-tracker__search_tasks",
+      "mcp__task-tracker__create_tasks",
+      "Bash(nc -z localhost 5433)",
+      "Bash(psql \"postgresql://goalbot:1eb915be9365aa5f19805fe13bcfb85f2e5281a6ddfdb9f0@localhost:5433/agency\" -P pager=off -c \"SELECT profile_id, display_name, timezone, morning_prompt_local_time FROM profile.person;\" -c \"SELECT p.id, p.kind, gp.label FROM profile.profile p LEFT JOIN profile.group_profile gp ON gp.profile_id = p.id;\")",
+      "Bash(ssh vps *)",
+      "Bash(git commit -m 'expose preamble on the rollover MCP tool \\(use case already took it\\) *)",
+      "Bash(ls /Users/matthew/dev/agency-agent/doc/adr/ && sed -n 1,40p /Users/matthew/dev/agency-agent/doc/adr/0019*.md && tail -8 /Users/matthew/dev/agency-agent/doc/adr/INDEX.md)",
+      "Bash(git -C /Users/matthew/dev/agency-agent stash list)",
+      "Bash(git -C /Users/matthew/dev/agency-agent diff --stat -- packages/goal-bot/tests/test_ritual_assembly.py)",
+      "Bash(git commit -q -m 'get_db_target tool on both MCP servers \\(ingestion step-0 safety\\) *)",
+      "Bash(git commit -q -m 'goal_version.notes \\(migration 0008\\): authored logistics out of the bar text *)",
+      "Bash(git commit -q -m 'goal-markdown v0.9 + clean chapter template + ingest-skill retro fixes *)",
+      "Edit(/.claude/skills/wrap-up/**)",
+      "mcp__task-tracker__get_db_target"
+    ],
+    "additionalDirectories": [
+      "/Users/matthew/dev/agency-agent/doc/adr"
     ]
   }
 }
