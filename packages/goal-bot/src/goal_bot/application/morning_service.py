@@ -4,11 +4,16 @@ from datetime import date, timedelta
 from agency_profile.application.ports import ProfileRepositoryPort
 from task_tracker.application.query_client import DailySignal, TaskQueryClient
 
-from goal_bot.application.morning_context import CandidateItem, InsightHypothesis
+from goal_bot.application.morning_context import (
+    CandidateItem,
+    InsightHypothesis,
+    SurfacedVisualization,
+)
 from goal_bot.application.morning_turn import MorningTurn, Session
 from goal_bot.application.ports import (
     GoalRepositoryPort,
     PlanRepositoryPort,
+    VisualizationRepositoryPort,
     WinRepositoryPort,
 )
 from goal_bot.application.ritual_assembly import assemble_morning_context
@@ -34,6 +39,9 @@ class MorningService:
     # Profile port (Tier-1 profile_doc) — feeds the framing-at-the-margin excerpt
     # (B5, §7a). Optional; framing is a light touch, never load-bearing.
     profiles: ProfileRepositoryPort | None = None
+    # Before-bed /visualize captures, reshared at the next fire. Optional so
+    # the ritual runs (and older tests pass) without the store wired.
+    visualizations: VisualizationRepositoryPort | None = None
 
     def fire_morning(self, person_id: int, plan_date: date) -> Session:
         ctx = assemble_morning_context(
@@ -46,6 +54,7 @@ class MorningService:
             hypotheses=self._hypotheses(person_id),
             framing_excerpt=self._framing_excerpt(person_id),
             group_owner_ids=self._group_owner_ids(person_id),
+            visualizations=self._claim_visualizations(person_id, plan_date),
         )
         # Persist both the individual plan and the fanned-out group items so a
         # shared goal is a real plan item in each member's plan (shared
@@ -58,6 +67,26 @@ class MorningService:
 
     def handle_reply(self, session: Session, user_text: str) -> Session:
         return self.turn.reply(session, user_text)
+
+    def record_visualization(self, person_id: int, text: str) -> bool:
+        """Store a /visualize capture for the next morning fire. Returns False
+        when no visualization store is wired (the command degrades gracefully)."""
+        if self.visualizations is None:
+            return False
+        self.visualizations.add_visualization(person_id, text)
+        return True
+
+    def _claim_visualizations(
+        self, person_id: int, plan_date: date
+    ) -> list[SurfacedVisualization]:
+        # Consume-on-read: claimed here, surfaced once, never again — a same-day
+        # re-fire (manual /morning after the scheduled one) sees an empty list.
+        if self.visualizations is None:
+            return []
+        return [
+            SurfacedVisualization(text=v.text, captured_at=v.created_at)
+            for v in self.visualizations.claim_unsurfaced(person_id, plan_date)
+        ]
 
     def _daily_signal(self, person_id: int, plan_date: date) -> DailySignal | None:
         # person_id (goalbot) == owner_id (task-tracker): same profile.person.

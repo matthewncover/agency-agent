@@ -8,6 +8,7 @@ from goal_bot.application.morning_context import (
     InsightHypothesis,
     MorningContext,
     ReassessmentNudge,
+    SurfacedVisualization,
     SurfacedWin,
     YesterdayItem,
 )
@@ -144,6 +145,7 @@ def assemble_morning_context(
     hypotheses: list[InsightHypothesis] | None = None,
     framing_excerpt: str | None = None,
     group_owner_ids: list[int] | None = None,
+    visualizations: list[SurfacedVisualization] | None = None,
 ) -> MorningContext:
     # 1. Yesterday's plan
     yesterday_date = plan_date - timedelta(days=1)
@@ -346,6 +348,7 @@ def assemble_morning_context(
         chapter_preamble=active_chapter.preamble if active_chapter else None,
         group_block=group_block,
         shared_notices=shared_notices,
+        visualizations=list(visualizations or []),
     )
 
 

@@ -1,6 +1,16 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
+
+
+class SurfacedVisualization(BaseModel):
+    """A before-bed /visualize capture given back at the next morning fire —
+    the person's own words, quoted or lightly trimmed, never rewritten. It is
+    their picture, not an assignment: an unrealized one is never a miss and
+    never resurfaces (consume-on-read)."""
+
+    text: str
+    captured_at: datetime | None = None
 
 
 class SurfacedWin(BaseModel):
@@ -100,3 +110,7 @@ class MorningContext(BaseModel):
     # notice that a shared goal's bar was recently adjusted, for optional
     # discussion. Never ranks or names a person.
     shared_notices: list[str] = []
+    # Before-bed /visualize captures claimed by this fire (oldest first) —
+    # reshared in the person's own words right after the wins, with one light
+    # why link. Wins still lead (non-negotiable 7).
+    visualizations: list[SurfacedVisualization] = []

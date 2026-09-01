@@ -24,6 +24,7 @@ def _clean_db(migrated_engine):
                 "TRUNCATE "
                 "goalbot.daily_plan_item, goalbot.daily_plan, "
                 "goalbot.friction_log, goalbot.win_log, "
+                "goalbot.visualization, "
                 "goalbot.anticipated_obstacle, goalbot.goal_tag, "
                 "goalbot.goal_version, goalbot.goal_state, "
                 "goalbot.rotation_group, "

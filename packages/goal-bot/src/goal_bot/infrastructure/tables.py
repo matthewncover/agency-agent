@@ -237,6 +237,28 @@ insight = Table(
     ),
 )
 
+visualization = Table(
+    "visualization",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "person_id",
+        BigInteger,
+        ForeignKey("profile.person.profile_id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("text", Text, nullable=False),
+    Column(
+        "created_at",
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    ),
+    # Consume marker: the plan_date whose morning claimed this row. NULL =
+    # not yet surfaced; set once, never resurfaced.
+    Column("surfaced_on", Date),
+)
+
 win_log = Table(
     "win_log",
     metadata,

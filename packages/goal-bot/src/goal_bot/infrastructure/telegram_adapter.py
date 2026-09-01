@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from datetime import date
@@ -219,7 +220,12 @@ class TelegramAdapter:
         label = self.label_outbound
 
         async def _job() -> None:
-            session = service.fire_morning(person_id, date.today())
+            # fire_morning is synchronous (DB reads + a blocking LLM call).
+            # Run it off the event loop: when two persons' mornings land on
+            # the same UTC instant, an inline call would freeze the loop for
+            # the whole first turn and push the second job past its misfire
+            # window — one message per household instead of two.
+            session = await asyncio.to_thread(service.fire_morning, person_id, date.today())
             sessions[(chat_id, person_id)] = session
             if session.response_text:
                 text = label(chat_id, person_id, session.response_text)

@@ -17,6 +17,9 @@ from goal_bot.application.use_cases import GoalUseCases
 from goal_bot.config import Settings, get_settings
 from goal_bot.infrastructure.adapters.goal_repo import SqlAlchemyGoalRepository
 from goal_bot.infrastructure.adapters.plan_repo import SqlAlchemyPlanRepository
+from goal_bot.infrastructure.adapters.visualization_repo import (
+    SqlAlchemyVisualizationRepository,
+)
 from goal_bot.infrastructure.adapters.win_repo import SqlAlchemyWinRepository
 from goal_bot.infrastructure.anthropic_llm import AnthropicLLMAdapter
 from goal_bot.infrastructure.heartbeat import HttpHeartbeat
@@ -85,6 +88,7 @@ def build_app(settings: Settings) -> App:
         turn=turn,
         tasks=tasks,
         profiles=profiles,
+        visualizations=SqlAlchemyVisualizationRepository(engine),
     )
     _log.info("build_app: service ready")
 

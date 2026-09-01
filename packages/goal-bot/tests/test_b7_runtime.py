@@ -84,6 +84,27 @@ def test_two_persons_register_two_jobs_at_their_local_times():
     assert sched.jobs["morning-2"]["timezone"] == "America/New_York"
 
 
+def test_morning_jobs_get_a_generous_misfire_grace():
+    # Two persons on the same UTC offset fire at the same instant; the second
+    # job starts only after the first person's whole morning turn. With
+    # APScheduler's default 1s grace it was skipped as a misfire — one
+    # household, one message. Late must beat never.
+    sched = _FakeScheduler()
+    p = Person(
+        display_name="A",
+        timezone="America/Los_Angeles",
+        morning_prompt_local_time=time(6, 0),
+    )
+    schedule_morning(
+        sched, run_morning=lambda: None, person=p, debug_interval=None, job_id="cron"
+    )
+    schedule_morning(
+        sched, run_morning=lambda: None, person=p, debug_interval=30, job_id="debug"
+    )
+    assert sched.jobs["cron"]["misfire_grace_time"] >= 60
+    assert sched.jobs["debug"]["misfire_grace_time"] >= 60
+
+
 # --- inbound routing (membership auth + chat→person) ------------------------
 
 

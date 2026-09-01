@@ -140,6 +140,19 @@ class WinLogEntry(BaseModel):
     created_at: datetime | None = None
 
 
+class Visualization(BaseModel):
+    """A before-bed /visualize capture — the person's own picture of what they
+    want tomorrow to look like. Reshared verbatim at the next morning fire and
+    then consumed (surfaced_on set); it never resurfaces and an unrealized one
+    is never a miss."""
+
+    id: int | None = None
+    person_id: int
+    text: str
+    created_at: datetime | None = None
+    surfaced_on: date | None = None
+
+
 class Insight(BaseModel):
     """A Tier-3 advisory digest entry (goalbot.insight). Surfaced to the morning
     turn as a *hypothesis* the user confirms or rejects (D-11), never a verdict.

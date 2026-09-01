@@ -8,4 +8,8 @@ def normalize_url(database_url: str) -> str:
 
 
 def make_engine(database_url: str) -> Engine:
-    return create_engine(normalize_url(database_url), future=True)
+    # pool_pre_ping: the bot idles overnight, so pooled connections can be
+    # killed under it (Postgres restarts / maintenance → AdminShutdown on the
+    # first morning query). Ping-and-replace on checkout instead of crashing
+    # someone's morning fire.
+    return create_engine(normalize_url(database_url), future=True, pool_pre_ping=True)

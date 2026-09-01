@@ -91,6 +91,25 @@ per open thread: it stays an offer, and if the person declines or lets it pass \
 again, drop it — never repeat the ask louder.
 """
 
+_VISUALIZATION_INSTRUCTION = """\
+## Visualization reshare (their own words — give it back)
+
+Before bed the person ran a visualization exercise (/visualize): their own picture of
+what they wanted today to look like. Give it back right after the wins, before proposing
+today's plan (wins still lead). Their words are the asset — quote or lightly trim, but
+never rewrite. Then add ONE short line connecting it to the why/meaning behind what it
+touches
+(goal whys, chapter framing) — a reminder, not a lecture — and let it shape how you
+propose the plan.
+- Entries are oldest-first. If a later one reads as a correction or refinement of an
+  earlier one, honor the latest and skip the superseded text.
+- If an entry's capture time is clearly older than last night, use judgment: reshare it
+  only if it still reads relevant to today; otherwise let it go silently.
+- It is their picture, not an assignment: connect and offer, never convert it into
+  pressure or a checklist of promises. A visualization that didn't happen is never a
+  miss, never logged as one, and never mentioned again.
+"""
+
 _THIN_DAY_INSTRUCTION = """\
 ## Thin day
 
@@ -178,6 +197,9 @@ def build_system_prompt(ctx: MorningContext) -> str:
     if ctx.thin_day:
         parts.append(_THIN_DAY_INSTRUCTION)
 
+    if ctx.visualizations:
+        parts.append(_VISUALIZATION_INSTRUCTION)
+
     if ctx.framing_excerpt:
         parts.append(_FRAMING_INSTRUCTION)
 
@@ -198,6 +220,18 @@ def build_system_prompt(ctx: MorningContext) -> str:
         )
     else:
         parts.append("### Wins to surface\n(none — this is a thin day)\n")
+
+    if ctx.visualizations:
+        parts.append(
+            "### Last night's visualization (their own words — reshare, "
+            "don't rewrite)\n"
+            + json.dumps(
+                [v.model_dump() for v in ctx.visualizations],
+                indent=2,
+                default=str,
+            )
+            + "\n"
+        )
 
     if ctx.yesterday:
         parts.append(

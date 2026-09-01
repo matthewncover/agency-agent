@@ -11,6 +11,7 @@ from goal_bot.domain.entities import (
     Insight,
     PlanItemStatus,
     RotationGroup,
+    Visualization,
     WinLogEntry,
 )
 
@@ -278,3 +279,18 @@ class WinRepositoryPort(ABC):
 
     @abstractmethod
     def list_wins(self, person_id: int, limit: int = 20) -> list[WinLogEntry]: ...
+
+
+class VisualizationRepositoryPort(ABC):
+    """Before-bed /visualize captures, reshared at the next morning fire."""
+
+    @abstractmethod
+    def add_visualization(self, person_id: int, text: str) -> Visualization: ...
+
+    @abstractmethod
+    def claim_unsurfaced(self, person_id: int, plan_date: date) -> list[Visualization]:
+        """Every not-yet-surfaced capture for the person, oldest first, marked
+        surfaced_on=plan_date in the same transaction. Consume-on-read: a claimed
+        row never resurfaces (same-day re-fires included), so a visualization
+        that doesn't pan out leaves no trail to be guilted over."""
+        ...
