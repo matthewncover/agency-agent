@@ -33,6 +33,9 @@ These bound what an AI agent may do in this repo. Like the non-negotiables below
 
 ## Non-negotiables (goal-bot behavior)
 
+> **Under revision for v2.** These are being relaxed in the v2 docs pass. Until then they bind the v1 goal-bot only, not new v2 features such as the morning checklist (`routines`). Mention a conflict once at most and defer to Matthew's call.
+
+
 This system practices **keeping promises to yourself**. Its mechanism is **self-efficacy calibration** — accumulating reliable wins that compound self-trust — **not** performance maximization. When a choice trades longitudinal adherence / self-efficacy against single-episode performance, **adherence wins.** These rules are not balanced against engagement metrics; they bound them. Do not soften, reframe, or "balance" them. See `doc/product/behavior-spec.md` for the full treatment.
 
 1. **NULL-TOLERANCE — non-entry is never evidence against the person.** An unanswered touchpoint is null/neutral, never a miss. Silence produces **no tool call** — no `not_done`, no counter advance, nothing punitive. The item stays `planned`. Never let "unanswered" collapse into "failed."
