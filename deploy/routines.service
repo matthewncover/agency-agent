@@ -1,0 +1,61 @@
+# routines.service: systemd unit for the morning checklist bot + Mini App (ADR-0021).
+#
+# Install:
+#   sudo cp deploy/routines.service /etc/systemd/system/routines.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now routines.service
+# Logs:
+#   journalctl -u routines -f
+#
+# Assumes:
+#   - repo cloned at /opt/agency-agent (tracking the v2 branch), owned by user `goalbot`
+#   - uv installed at /usr/local/bin/uv (adjust ExecStart if elsewhere:
+#     `command -v uv` on the box)
+#   - secrets in /etc/agency-agent/agency.env (0640, owned by goalbot), shared
+#     with goal-bot and NOT in the repo. See .env.prod.example.
+#   - Telegram still runs in polling mode, but this unit also serves the Mini App
+#     on 127.0.0.1:8081 behind Caddy (see deploy/Caddyfile and ADR-0021). Only
+#     Caddy listens publicly; this process binds localhost.
+
+[Unit]
+Description=routines (agency-agent) morning checklist bot + Mini App
+Documentation=file:///opt/agency-agent/deploy/README.md
+# Wait for network; if Postgres runs locally under systemd, also gate on it.
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=goalbot
+Group=goalbot
+WorkingDirectory=/opt/agency-agent
+
+# Secrets/config live outside the repo. `-` = don't fail if absent at first boot.
+EnvironmentFile=-/etc/agency-agent/agency.env
+
+# uv resolves the workspace venv and runs polling + aiohttp + scheduler on one loop.
+ExecStart=/usr/local/bin/uv run python -m routines
+
+# Restart on crash, but back off so a hard-failing config doesn't hot-loop.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logs to the journal (stderr).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=routines
+
+# --- Light hardening (personal tool; not exhaustive) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# uv needs a writable cache; grant just that. Same cache as goal-bot.service
+# on purpose: deploy.sh's `as_app` syncs into /var/cache/goal-bot-uv.
+Environment=UV_CACHE_DIR=/var/cache/goal-bot-uv
+CacheDirectory=goal-bot-uv
+
+[Install]
+WantedBy=multi-user.target

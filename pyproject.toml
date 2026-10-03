@@ -1,7 +1,7 @@
 [project]
 name = "agency-agent"
 version = "0.0.0"
-description = "agency-agent monorepo (profile, task-tracker, goal-bot)"
+description = "agency-agent monorepo (profile, task-tracker, goal-bot, routines)"
 requires-python = ">=3.13"
 dependencies = []
 
@@ -35,6 +35,6 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "migrations/versions/*.py" = ["E501"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/profile/tests", "packages/task-tracker/tests", "packages/goal-bot/tests"]
+testpaths = ["packages/profile/tests", "packages/task-tracker/tests", "packages/goal-bot/tests", "packages/routines/tests"]
 markers = ["integration: needs a running Postgres"]
 addopts = "--import-mode=importlib"

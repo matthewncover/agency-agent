@@ -43,14 +43,26 @@ reset-db:
 run:
     uv run python -m goal_bot
 
+# ADR-0021: morning checklist bot + Mini App (polling + aiohttp + scheduler, one process).
+routines:
+    uv run python -m routines
+
+# Dev only: refused unless bound to 127.0.0.1. With no ROUTINES_BOT_TOKEN it
+# serves just the page and API, and completion messages go to the log; set a
+# dev bot token (never the prod one) to also poll and post.
+# Mini App UI in a browser at http://127.0.0.1:8081/, skipping Telegram auth.
+routines-dev person="1":
+    ROUTINES_DEV_PERSON_ID={{person}} ROUTINES_HTTP_HOST=127.0.0.1 uv run python -m routines
+
 db-url:
     @echo $DATABASE_URL
 
-# C2: routine deploy on the VPS — ff-pull, sync, migration-pending gate,
-# restart, health check. Stops (without restarting) if migrations are pending
-# and hands you to `deploy-migrate`. Run as root on the VPS.
-deploy:
-    deploy/deploy.sh
+# C2: ff-pull, sync, migration-pending gate, restart, health check. Stops
+# (without restarting) if migrations are pending and hands you to
+# `deploy-migrate`. `just deploy goal-bot` targets the stopped v1 unit.
+# Routine deploy on the VPS (run as root); restarts the `routines` unit by default.
+deploy unit="routines":
+    UNIT={{unit}} deploy/deploy.sh
 
 # B8: preview the pending migration plan against $DATABASE_URL, then apply it
 # only after an explicit typed confirm. Human-run, never auto-run (CLAUDE.md).

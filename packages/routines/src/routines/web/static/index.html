@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Morning</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* ---- Theme tokens (Telegram vars, plain-browser fallbacks) ---- */
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f5);
+    --text: var(--tg-theme-text-color, #1c1c1e);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --link: var(--tg-theme-link-color, #2a7ae2);
+    --btn: var(--tg-theme-button-color, #2a7ae2);
+    --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    --danger: var(--tg-theme-destructive-text-color, #d93a3a);
+    --line: rgba(127, 127, 127, 0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--tg-theme-bg-color, #17212b);
+      --bg2: var(--tg-theme-secondary-bg-color, #232e3c);
+      --text: var(--tg-theme-text-color, #f5f5f5);
+      --hint: var(--tg-theme-hint-color, #8d99a6);
+      --link: var(--tg-theme-link-color, #62a9f0);
+      --btn: var(--tg-theme-button-color, #5288c1);
+      --btn-text: var(--tg-theme-button-text-color, #ffffff);
+      --danger: var(--tg-theme-destructive-text-color, #ec5f5f);
+    }
+  }
+
+  /* ---- Base ---- */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; overflow-x: hidden; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 17px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px 40px; }
+  [hidden] { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 4px; min-height: 60px; }
+  h1 { flex: 1; margin: 0; font-size: 26px; font-weight: 600; }
+  .hbtn { min-width: 44px; min-height: 44px; padding: 0 10px; border: 0; background: none;
+          color: var(--link); font-size: 17px; display: inline-flex; align-items: center; justify-content: center; }
+  .hbtn.quiet { color: var(--hint); }
+  .hbtn.strong { font-weight: 600; }
+  .hbtn:disabled { opacity: 0.4; }
+  .hbtn svg { width: 22px; height: 22px; }
+
+  .card { background: var(--bg2); border-radius: 12px; overflow: hidden; }
+  .note-line { color: var(--hint); margin: 8px 2px; }
+  .msg { color: var(--danger); font-size: 15px; margin: 10px 2px; min-height: 0; }
+  .msg:empty { display: none; }
+  .full { text-align: center; color: var(--hint); padding: 64px 16px; }
+
+  /* ---- View mode rows ---- */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li + li, .sub li { border-top: 1px solid var(--line); }
+  .row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px;
+         padding: 10px 14px; border: 0; background: none; text-align: left; }
+  .row .text { flex: 1; min-width: 0; overflow-wrap: anywhere; transition: color 0.15s; }
+  .row.on .text { color: var(--hint); }
+  .row.parent { font-weight: 600; cursor: default; }
+  .sub { list-style: none; margin: 0; padding: 0; }
+  .sub .row { padding-left: 50px; }
+  .box { flex: none; width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--hint);
+         position: relative; transition: background 0.15s, border-color 0.15s; }
+  .on > .box { background: var(--btn); border-color: var(--btn); }
+  .on > .box::after { content: ""; position: absolute; left: 6px; top: 1px; width: 6px; height: 12px;
+                      border: solid var(--btn-text); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .parent > .box { border-radius: 50%; opacity: 0.7; }
+
+  /* ---- Notes + complete ---- */
+  textarea { display: block; width: 100%; margin-top: 16px; min-height: 52px; padding: 12px 14px;
+             font: inherit; font-size: 16px; color: var(--text); background: var(--bg2);
+             border: 1px solid var(--line); border-radius: 12px; resize: none; overflow: hidden; }
+  textarea::placeholder, input::placeholder { color: var(--hint); }
+  .primary { display: block; width: 100%; min-height: 52px; margin-top: 12px; border: 0; border-radius: 12px;
+             background: var(--btn); color: var(--btn-text); font-size: 17px; font-weight: 600; }
+  .primary:disabled { opacity: 0.45; cursor: default; }
+
+  /* ---- Edit mode ---- */
+  .edit-item + .edit-item, .edit-children .edit-item { border-top: 1px solid var(--line); }
+  .edit-row { display: flex; align-items: center; gap: 2px; min-height: 54px; padding: 4px 4px 4px 0; }
+  .edit-children { padding-left: 28px; }
+  .handle { flex: none; width: 40px; height: 44px; display: flex; align-items: center; justify-content: center;
+            color: var(--hint); font-size: 22px; cursor: grab; touch-action: none; user-select: none; }
+  .no-drag .handle { visibility: hidden; }
+  .saving .handle { opacity: 0.3; cursor: default; }
+  .edit-row input:disabled, .add-row input:disabled, .add-row button:disabled { opacity: 0.5; }
+  .edit-row input, .add-row input {
+    flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  .ib { flex: none; width: 40px; height: 44px; border: 0; background: none; color: var(--link); font-size: 19px; }
+  .ib:disabled { opacity: 0.3; cursor: default; }
+  .ib.del { color: var(--danger); }
+  .ghost { opacity: 0.35; }
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-row button { flex: none; min-width: 64px; min-height: 44px; border: 0; border-radius: 8px;
+                    background: var(--btn); color: var(--btn-text); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Morning</h1>
+    <span id="hdr"></span>
+  </header>
+
+  <main id="main"><p class="full">Loading…</p></main>
+
+  <section id="view-foot" hidden>
+    <textarea id="note" maxlength="1000" rows="1" placeholder="Add a note (optional)"></textarea>
+    <button id="complete" class="primary" type="button">Complete morning</button>
+    <p id="view-msg" class="msg" role="status"></p>
+  </section>
+
+  <section id="edit-foot" hidden>
+    <div class="add-row">
+      <input id="add-input" type="text" maxlength="200" placeholder="New item" enterkeyhint="done">
+      <button id="add-btn" type="button">Add</button>
+    </div>
+    <p id="edit-msg" class="msg" role="status"></p>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- Telegram setup ----
+  const tg = (window.Telegram && window.Telegram.WebApp) || null;
+  const initData = (tg && tg.initData) || '';
+  if (tg) { try { tg.ready(); tg.expand(); } catch (e) { /* plain browser */ } }
+
+  function haptic(kind) {
+    try {
+      const h = tg && tg.HapticFeedback;
+      if (!h) return;
+      if (kind === 'success') h.notificationOccurred('success');
+      else h.selectionChanged();
+    } catch (e) { /* ignore */ }
+  }
+  function setVerticalSwipes(enabled) {
+    // Telegram's swipe-to-minimize fights drag-to-reorder; pause it while editing.
+    try {
+      const fn = tg && (enabled ? tg.enableVerticalSwipes : tg.disableVerticalSwipes);
+      if (typeof fn === 'function') fn.call(tg);
+    } catch (e) { /* ignore */ }
+  }
+  function askConfirm(text, cb) {
+    try {
+      if (tg && tg.showConfirm && tg.isVersionAtLeast && tg.isVersionAtLeast('6.2')) {
+        tg.showConfirm(text, cb);
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    cb(window.confirm(text));
+  }
+
+  // ---- Storage (every access guarded) ----
+  const NOTE_KEY = 'routines-morning-note';
+  function storeGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function storeSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  function storeDel(k) { try { window.localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+
+  // ---- API ----
+  async function api(method, path, body) {
+    const opts = { method, cache: 'no-store', headers: { Authorization: 'tma ' + initData } };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    try {
+      const res = await fetch(path, opts);
+      let data = null;
+      try { data = await res.json(); } catch (e) { /* non-JSON body */ }
+      return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+      return { ok: false, status: 0, data: null };
+    }
+  }
+  // Friendly copy only; raw server strings never reach the screen (except PUT 400s, see saveEdit).
+  function friendly(r) {
+    if (r.status === 0) return "Can't reach the server. Check your connection.";
+    return 'Something went wrong. Try again.';
+  }
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  // 401/403 replace the whole page. Returns true when handled.
+  function authFail(r) {
+    if (r.status === 401) { fullPage("Couldn't verify you. Reopen this from Telegram."); return true; }
+    if (r.status === 403) { fullPage("You're not set up yet."); return true; }
+    return false;
+  }
+
+  // ---- State ----
+  let list = null;       // last server list body
+  let mode = 'view';     // 'view' | 'edit' | 'blocked'
+  let draft = [];        // edit-mode working copy
+  let keySeq = 0;
+  let checkSeq = 0;
+  let sending = false;
+  let saving = false;
+  let needsReload = false; // a refresh was wanted while editing; do it on the way out
+  let sortables = [];
+
+  function normalize(body) {
+    body.items = (body.items || []).map(function (it) {
+      it.children = it.children || [];
+      return it;
+    });
+    return body;
+  }
+
+  // ---- DOM helpers ----
+  const $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function svgPencil() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const s = document.createElementNS(ns, 'svg');
+    s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none');
+    s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2');
+    s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z');
+    s.appendChild(p);
+    return s;
+  }
+  function headerButton(label, cls, onClick, icon) {
+    const b = el('button', 'hbtn ' + (cls || ''), icon ? null : label);
+    b.type = 'button';
+    if (icon) { b.appendChild(icon); b.setAttribute('aria-label', label); }
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function fullPage(text) {
+    mode = 'blocked';
+    setVerticalSwipes(true);
+    $('hdr').replaceChildren();
+    $('main').replaceChildren(el('p', 'full', text));
+    $('view-foot').hidden = true;
+    $('edit-foot').hidden = true;
+  }
+
+  // ---- View mode ----
+  // Only finished top-level items get sent; a parent counts once all its children are checked.
+  function anyTopChecked() {
+    return list.items.some(function (it) { return it.checked === true; });
+  }
+
+  function leafRow(item) {
+    const b = el('button', 'row leaf' + (item.checked ? ' on' : ''));
+    b.type = 'button';
+    b.setAttribute('role', 'checkbox');
+    b.setAttribute('aria-checked', String(!!item.checked));
+    b.append(el('span', 'box'), el('span', 'text', item.text));
+    b.addEventListener('click', function () { toggle(item.id); });
+    return b;
+  }
+
+  function renderView() {
+    $('hdr').replaceChildren(headerButton('Edit', '', enterEdit, svgPencil()));
+    const main = $('main');
+    if (!list.items.length) {
+      main.replaceChildren(el('p', 'note-line', 'No items yet.'),
+                           el('p', 'note-line', 'Tap the pencil to add some.'));
+    } else {
+      const ul = el('ul', 'list card');
+      list.items.forEach(function (it) {
+        const li = el('li');
+        if (it.children.length) {
+          const head = el('div', 'row parent' + (it.checked ? ' on' : ''));
+          head.setAttribute('aria-label', it.text + (it.checked ? ', all done' : ''));
+          head.append(el('span', 'box'), el('span', 'text', it.text));
+          const sub = el('ul', 'sub');
+          it.children.forEach(function (c) { const cli = el('li'); cli.appendChild(leafRow(c)); sub.appendChild(cli); });
+          li.append(head, sub);
+        } else {
+          li.appendChild(leafRow(it));
+        }
+        ul.appendChild(li);
+      });
+      main.replaceChildren(ul);
+    }
+    $('view-foot').hidden = false;
+    $('edit-foot').hidden = true;
+    const btn = $('complete');
+    btn.textContent = list.sent_today ? 'Sent' : (sending ? 'Sending…' : 'Complete morning');
+    btn.disabled = sending || list.sent_today || !anyTopChecked();
+    // Once sent, there's nowhere for a note to go today: hide the box, drop any draft.
+    if (list.sent_today) clearNote();
+    note.hidden = !!list.sent_today;
+    autosize();
+  }
+
+  function findItem(id) {
+    for (const it of list.items) {
+      if (it.id === id) return { item: it, parent: null };
+      for (const c of it.children) if (c.id === id) return { item: c, parent: it };
+    }
+    return null;
+  }
+  function setChecked(id, value) {
+    const f = findItem(id);
+    if (!f) return;
+    f.item.checked = value;
+    if (f.parent) f.parent.checked = f.parent.children.every(function (c) { return c.checked; });
+  }
+
+  async function toggle(id) {
+    const f = findItem(id);
+    if (!f) return;
+    const next = !f.item.checked;
+    setChecked(id, next);
+    $('view-msg').textContent = '';
+    haptic();
+    renderView();
+    const seq = ++checkSeq;
+    const r = await api('POST', 'api/check', { id: id, checked: next });
+    if (r.ok) {
+      if (seq === checkSeq && r.data) { list = normalize(r.data); if (mode === 'view') renderView(); }
+      return;
+    }
+    if (authFail(r)) return;
+    // Server state is the truth: refetch rather than revert locally.
+    $('view-msg').textContent = r.status === 404
+      ? 'That item changed, so the list was refreshed.' : friendly(r);
+    refresh().then(function (res) {
+      // Refetch failed too: undo the optimistic tap so the screen doesn't lie.
+      if (res && !res.ok && mode === 'view') { setChecked(id, !next); renderView(); }
+    });
+  }
+
+  // ---- Notes ----
+  const note = $('note');
+  function clearNote() {
+    storeDel(NOTE_KEY);
+    note.value = '';
+  }
+  function autosize() {
+    note.style.height = 'auto';
+    note.style.height = note.scrollHeight + 2 + 'px';
+  }
+  note.value = storeGet(NOTE_KEY) || '';
+  note.addEventListener('input', function () { storeSet(NOTE_KEY, note.value); autosize(); });
+
+  // ---- Complete ----
+  $('complete').addEventListener('click', async function () {
+    if (sending || !list || list.sent_today) return;
+    sending = true;
+    $('view-msg').textContent = '';
+    renderView();
+    const text = note.value.trim();
+    const r = await api('POST', 'api/send', { note: text || null });
+    sending = false;
+    if (r.ok && r.data) {
+      clearNote();
+      list = normalize(r.data);
+      haptic('success');
+    } else if (authFail(r)) {
+      return;
+    } else if (r.status === 409) {
+      clearNote(); // already sent (maybe from another device)
+      refresh();
+    } else if (r.status === 400) {
+      $('view-msg').textContent = "Nothing's finished yet.";
+      refresh();
+    } else {
+      $('view-msg').textContent = r.status === 502
+        ? "Couldn't post to Telegram. Try again." : friendly(r);
+    }
+    if (mode === 'view') renderView();
+  });
+
+  // ---- Edit mode ----
+  function copyItem(it) {
+    return { id: it.id, text: it.text, _k: ++keySeq, children: (it.children || []).map(copyItem) };
+  }
+
+  function enterEdit() {
+    if (!list) return;
+    draft = list.items.map(copyItem);
+    mode = 'edit';
+    $('edit-msg').textContent = '';
+    $('add-input').value = '';
+    setVerticalSwipes(false);
+    renderEdit();
+    loadSortable().then(function () { if (mode === 'edit') attachSortables(); });
+  }
+  function exitEdit() {
+    destroySortables();
+    draft = [];
+    mode = 'view';
+    setVerticalSwipes(true);
+    $('view-msg').textContent = '';
+    renderView();
+    if (needsReload) load();
+  }
+  function cancelEdit() { if (!saving) exitEdit(); }
+
+  // ---- Drag to reorder (SortableJS, loaded on first edit so view mode never waits on it) ----
+  const SORTABLE_URL = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js';
+  let sortablePromise = null;
+  function loadSortable() {
+    if (!sortablePromise) {
+      sortablePromise = new Promise(function (resolve) {
+        if (window.Sortable) { resolve(true); return; }
+        const s = document.createElement('script');
+        s.src = SORTABLE_URL;
+        s.async = true;
+        s.onload = function () { resolve(!!window.Sortable); };
+        s.onerror = function () { s.remove(); sortablePromise = null; resolve(false); };
+        document.head.appendChild(s);
+      });
+    }
+    return sortablePromise;
+  }
+
+  function destroySortables() {
+    sortables.forEach(function (s) { try { s.destroy(); } catch (e) { /* ignore */ } });
+    sortables = [];
+  }
+  function makeSortable(container, handleCls) {
+    sortables.push(window.Sortable.create(container, {
+      group: { name: 'g' + sortables.length, pull: false, put: false },
+      handle: '.' + handleCls,
+      draggable: '.edit-item',
+      animation: 150,
+      ghostClass: 'ghost',
+      onEnd: function () { syncFromDom(); renderEdit(); },
+    }));
+  }
+  // Without Sortable (still loading, or failed) edit mode works minus drag; handles hide.
+  function attachSortables() {
+    destroySortables();
+    const top = $('edit-list');
+    const canDrag = !!window.Sortable;
+    $('main').classList.toggle('no-drag', !canDrag);
+    if (!top || !canDrag || saving) return;
+    makeSortable(top, 'top-handle');
+    top.querySelectorAll(':scope > .edit-item > .edit-children').forEach(function (cc) {
+      makeSortable(cc, 'child-handle');
+    });
+  }
+
+  // Rebuild the draft order from the DOM after a drag.
+  function syncFromDom() {
+    const byKey = {};
+    draft.forEach(function (it) { byKey[it._k] = it; it.children.forEach(function (c) { byKey[c._k] = c; }); });
+    const top = $('edit-list');
+    draft = Array.from(top.children).map(function (node) {
+      const it = byKey[node.dataset.k];
+      const cc = node.querySelector(':scope > .edit-children');
+      it.children = cc ? Array.from(cc.children).map(function (n) { return byKey[n.dataset.k]; }) : [];
+      return it;
+    });
+  }
+
+  function iconBtn(text, label, cls, onClick, disabled) {
+    const b = el('button', 'ib ' + (cls || ''), text);
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    b.disabled = !!disabled || saving;
+    b.addEventListener('click', function () { if (!saving) onClick(); });
+    return b;
+  }
+
+  function editItem(item, parent, idx) {
+    const wrap = el('div', 'edit-item');
+    wrap.dataset.k = item._k;
+    const row = el('div', 'edit-row');
+    const handle = el('span', 'handle ' + (parent ? 'child-handle' : 'top-handle'), '≡');
+    handle.setAttribute('aria-label', 'Drag to reorder');
+    const input = el('input');
+    input.type = 'text';
+    input.maxLength = 200;
+    input.value = item.text;
+    input.disabled = saving;
+    input.setAttribute('enterkeyhint', 'done');
+    input.addEventListener('input', function () { item.text = input.value; });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') input.blur(); });
+    row.append(handle, input);
+
+    if (parent) {
+      row.appendChild(iconBtn('←', 'Move out', '', function () {
+        parent.children.splice(parent.children.indexOf(item), 1);
+        draft.splice(draft.indexOf(parent) + 1, 0, item);
+        renderEdit();
+      }));
+    } else {
+      const canIndent = idx > 0 && item.children.length === 0;
+      row.appendChild(iconBtn('→', 'Move under the item above', '', function () {
+        draft.splice(idx, 1);
+        draft[idx - 1].children.push(item);
+        renderEdit();
+      }, !canIndent));
+    }
+    row.appendChild(iconBtn('✕', 'Delete', 'del', function () {
+      const remove = function () {
+        if (saving) return;
+        const arr = parent ? parent.children : draft;
+        arr.splice(arr.indexOf(item), 1);
+        renderEdit();
+      };
+      if (!parent && item.children.length) {
+        askConfirm('Delete "' + (item.text.trim() || 'this item') + '" and its sub-items?',
+                   function (ok) { if (ok) remove(); });
+      } else {
+        remove();
+      }
+    }));
+    wrap.appendChild(row);
+
+    if (!parent && item.children.length) {
+      const cc = el('div', 'edit-children');
+      item.children.forEach(function (c, i) { cc.appendChild(editItem(c, item, i)); });
+      wrap.appendChild(cc);
+    }
+    return wrap;
+  }
+
+  function renderEdit() {
+    destroySortables();
+    const done = headerButton(saving ? 'Saving…' : 'Done', 'strong', saveEdit);
+    const cancel = headerButton('Cancel', 'quiet', cancelEdit);
+    done.disabled = cancel.disabled = saving;
+    $('hdr').replaceChildren(cancel, done);
+
+    const top = el('div', 'card');
+    top.id = 'edit-list';
+    draft.forEach(function (it, i) { top.appendChild(editItem(it, null, i)); });
+    const main = $('main');
+    main.replaceChildren();
+    main.classList.toggle('saving', saving);
+    if (!draft.length) main.appendChild(el('p', 'note-line', 'No items yet. Add one below.'));
+    main.appendChild(top);
+    attachSortables();
+
+    $('add-input').disabled = $('add-btn').disabled = saving;
+    $('view-foot').hidden = true;
+    $('edit-foot').hidden = false;
+  }
+
+  function addItem() {
+    const input = $('add-input');
+    const text = input.value.trim();
+    if (!text || saving) return;
+    draft.push({ id: null, text: text, _k: ++keySeq, children: [] });
+    input.value = '';
+    renderEdit();
+    input.focus();
+  }
+  $('add-btn').addEventListener('click', addItem);
+  $('add-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); addItem(); }
+  });
+
+  // Trim, drop blanks. A blank parent with real children promotes them to top level.
+  function buildPayload() {
+    const out = [];
+    draft.forEach(function (it) {
+      const kids = it.children
+        .map(function (c) { return { id: c.id, text: c.text.trim() }; })
+        .filter(function (c) { return c.text; });
+      const text = it.text.trim();
+      if (text) out.push({ id: it.id, text: text, children: kids });
+      else kids.forEach(function (c) { out.push({ id: c.id, text: c.text, children: [] }); });
+    });
+    return out;
+  }
+
+  async function saveEdit() {
+    if (saving) return;
+    const pending = $('add-input').value.trim();
+    if (pending) addItem(); // don't lose a typed-but-not-added item
+    saving = true;
+    $('edit-msg').textContent = '';
+    renderEdit();
+    const r = await api('PUT', 'api/list', { items: buildPayload() });
+    saving = false;
+    if (mode !== 'edit') return;
+    if (r.ok && r.data) {
+      list = normalize(r.data);
+      needsReload = false;
+      exitEdit();
+      return;
+    }
+    if (authFail(r)) return;
+    if (r.status === 409) {
+      // Edited on another device: reload, reopen edit on the fresh list.
+      const res = await load();
+      if (mode !== 'edit') return;
+      if (res.ok) {
+        enterEdit();
+        $('edit-msg').textContent =
+          'Your list changed on another device, so it was reloaded. Please redo your edit.';
+        return;
+      }
+      $('edit-msg').textContent = friendly(res);
+    } else {
+      $('edit-msg').textContent = r.status === 400 && r.data && r.data.error
+        ? capitalize(r.data.error) : friendly(r);
+    }
+    renderEdit();
+  }
+
+  // ---- Load / refresh ----
+  // Updates `list`; only redraws in view mode. Concurrent calls share one request.
+  // Resolves to the api result so callers can tell success from failure.
+  let loading = null;
+  function load() {
+    if (!loading) loading = fetchList().finally(function () { loading = null; });
+    return loading;
+  }
+  async function fetchList() {
+    const r = await api('GET', 'api/list');
+    if (r.ok && r.data) {
+      list = normalize(r.data);
+      needsReload = false;
+      if (mode === 'view') renderView();
+      return r;
+    }
+    if (authFail(r) || mode !== 'view') return r;
+    if (list) {
+      $('view-msg').textContent = friendly(r);
+      renderView();
+      return r;
+    }
+    const retry = el('button', 'hbtn', 'Try again');
+    retry.type = 'button';
+    retry.addEventListener('click', function () { $('main').replaceChildren(el('p', 'full', 'Loading…')); load(); });
+    const box = el('div', 'full');
+    box.append(el('p', null, friendly(r)), retry);
+    $('main').replaceChildren(box);
+    return r;
+  }
+  // Refetch now in view mode; while editing, defer until edit mode closes.
+  function refresh() {
+    if (mode === 'view') return load();
+    needsReload = true;
+    return Promise.resolve(null);
+  }
+
+  // A Mini App left open across the daily reset should show today's state on return.
+  function onReturn() { if (mode === 'view') load(); }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') onReturn();
+  });
+  try { if (tg && typeof tg.onEvent === 'function') tg.onEvent('activated', onReturn); } catch (e) { /* ignore */ }
+
+  // ---- Boot ----
+  load();
+})();
+</script>
+</body>
+</html>

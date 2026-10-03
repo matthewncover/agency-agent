@@ -1,0 +1,24 @@
+[project]
+name = "routines"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "profile",            # workspace dep: person identity + timezone (ADR-0007)
+    "python-telegram-bot>=21",
+    "apscheduler>=3.10,<4",
+    "httpx>=0.27",        # heartbeat pinger (ADR-0017)
+    "aiohttp>=3.9",       # Mini App page + API, on PTB's event loop (ADR-0021)
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+routines = ["web/static/*"]

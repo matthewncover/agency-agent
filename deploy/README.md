@@ -5,14 +5,22 @@ Ops for running goal-bot on the VPS against a real Postgres. Per spec
 **you** run the deploy, migrations, and secrets — the agent only authors these
 files. Nothing here auto-applies migrations or commits secrets.
 
-**Decisions baked in:** Telegram **polling** (simplest for one user; no public
-URL/TLS), prod on the VPS's own Postgres 16, local Docker stays dev/test only.
+**Decisions baked in:** Telegram **polling**, prod on the VPS's own Postgres 16,
+local Docker stays dev/test only. The original posture (no public URL, no TLS,
+no inbound port) changed in [ADR-0021](../doc/adr/0021-public-https-miniapp.md):
+the morning checklist serves a Telegram Mini App over HTTPS behind Caddy.
+
+**Current state:** the VPS checkout tracks the `v2` branch (`main` is frozen at
+tag `v1-final`). The `routines` unit is the live service; goal-bot (v1) is
+stopped and disabled.
 
 Artifacts in this dir:
 
 | file | what |
 |------|------|
-| `goal-bot.service` | systemd unit for the polling bot |
+| `goal-bot.service` | systemd unit for the goal-bot polling bot (v1; stopped and disabled) |
+| `routines.service` | systemd unit for the morning checklist bot + Mini App server (127.0.0.1:8081) |
+| `Caddyfile` | public HTTPS front door for `trendingupward.space`, path-routed to localhost apps |
 | `deploy.sh` | routine one-command deploy: pull → sync → migration gate → restart → health check (C2) |
 | `backup.sh` | daily `pg_dump` + prune + optional offsite copy |
 | `restore.sh` | restore a dump (also used to verify a backup) |
@@ -21,17 +29,20 @@ Artifacts in this dir:
 
 ## Routine deploy (C2 — after first deploy)
 
-Ship a change already pushed to a **green** `main` (CI is the gate — the
-script doesn't check GitHub; deploying from red is on you):
+Ship a change already pushed to a **green** `v2` (CI is the gate; the script
+doesn't check GitHub, so deploying from red is on you):
 
 ```sh
 ssh vps '/opt/agency-agent/deploy/deploy.sh'
 # or on the box: cd /opt/agency-agent && just deploy
 ```
 
+`just deploy` restarts the `routines` unit by default (`UNIT=routines`);
+`just deploy goal-bot` would target the stopped v1 unit.
+
 The script (as root; repo steps drop to `goalbot`): `git pull --ff-only` →
 `uv sync --locked --all-packages` → **stop if migrations are pending** →
-`systemctl restart goal-bot` → health check (unit active + startup marker in
+`systemctl restart $UNIT` → health check (unit active + startup marker in
 the journal, else non-zero exit with the journal tail). It never applies a
 migration and never force-pulls.
 
@@ -46,7 +57,7 @@ just deploy               # 3. re-run the routine deploy
 ```
 
 **Rollback:** code-only → as `goalbot`, `git checkout <prev-sha>` in
-`/opt/agency-agent`, re-run `deploy/deploy.sh`, then `git checkout main` once
+`/opt/agency-agent`, re-run `deploy/deploy.sh`, then `git switch v2` once
 fixed. A migrated deploy rolls back via `restore.sh` from the pre-migration
 backup — which is why the backup step is mandatory, not documentation.
 
@@ -96,6 +107,9 @@ backup — which is why the backup step is mandatory, not documentation.
    ```
    A scheduled `/morning` should reach your real bot.
 
+   (This is the v1 goal-bot unit. On v2, install `routines.service` instead;
+   see § Morning checklist (routines).)
+
 ## Reboot survival (acceptance #2)
 
 `enable`d + `Restart=on-failure` → the bot returns after a reboot. Verify:
@@ -144,6 +158,79 @@ it (per-person checks are a later refinement, see ADR-0017). The `/morning`
 debug command intentionally does **not** ping — manual pokes must not mask a
 dead scheduler.
 
+## Morning checklist (routines)
+
+A separate Telegram bot and process (ADR-0021). Each morning it posts one
+message to the shared group chat with a button that opens the Mini App at
+`https://trendingupward.space/morning/`. One process (`python -m routines`)
+runs Telegram polling, the aiohttp Mini App server on `127.0.0.1:8081`, and the
+scheduler. Caddy is the only public listener and strips the `/morning` prefix
+before proxying. Identity comes from Telegram's signed Mini App initData, mapped
+to persons via `TELEGRAM_USER_MAP`.
+
+First-time setup (once, in this order):
+
+1. **Domain.** A record `@` → the VPS IP (done). Turn **auto-renew on** at
+   Namecheap: a lapsed domain takes the Mini App down with it.
+2. **BotFather.** Create the new bot (`/newbot`), then `/newapp` for it with
+   short name `morning` and URL `https://trendingupward.space/morning/`. Add the
+   bot to the group chat. Privacy mode can stay on: the bot only needs
+   `/morning`.
+3. **Firewall.** Check `sudo ufw status` on the box and any Vultr firewall
+   group in the Vultr dashboard. Allow `80/tcp` (ACME challenge + redirect) and
+   `443/tcp`:
+   ```sh
+   sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
+   ```
+4. **Caddy.** Install from its official apt repo
+   ([instructions](https://caddyserver.com/docs/install#debian-ubuntu-raspbian)),
+   then:
+   ```sh
+   sudo cp /opt/agency-agent/deploy/Caddyfile /etc/caddy/Caddyfile
+   sudo systemctl reload caddy
+   ```
+   Caddy fetches and renews the Let's Encrypt cert on its own.
+5. **Switch the checkout to v2** (`main` is frozen at tag `v1-final`):
+   ```sh
+   sudo -u goalbot git -C /opt/agency-agent fetch
+   sudo -u goalbot git -C /opt/agency-agent switch v2
+   ```
+6. **Migration 0010** (human-gated, backup first):
+   ```sh
+   cd /opt/agency-agent
+   set -a; . /etc/agency-agent/agency.env; set +a
+   deploy/backup.sh
+   just deploy-migrate
+   ```
+7. **Env.** Add the `ROUTINES_*` vars to `/etc/agency-agent/agency.env` (see
+   `.env.prod.example` § Morning checklist) and make sure `TELEGRAM_USER_MAP`
+   is set. Paste the bot token by hand on the box, never into chat or AI tools.
+   Never set `ROUTINES_DEV_PERSON_ID` in prod.
+8. **Install the unit, then deploy.** `just deploy` runs `uv sync
+   --all-packages` (the checkout just gained the `routines` package), checks
+   no migration is pending, starts the unit, and health-checks it:
+   ```sh
+   sudo cp /opt/agency-agent/deploy/routines.service /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable routines
+   cd /opt/agency-agent && just deploy
+   journalctl -u routines -f
+   ```
+9. **Confirm the group chat id.** Send `/morning` in the group;
+   `journalctl -u routines` logs the calling chat id. Compare it to
+   `ROUTINES_CHAT_ID` (fix the env file and `sudo systemctl restart routines`
+   if they differ).
+10. **Heartbeat.** Reuse the existing healthchecks.io check (`HEARTBEAT_URL`,
+    same Liveness heartbeat setup above): routines pings it after the
+    scheduled morning send. Unpause the check once the first scheduled send
+    has gone out.
+11. **Smoke test.** `curl -I https://trendingupward.space/morning/` returns
+    `200`. Open the Mini App from the button in Telegram; Matthew and Jade
+    each see their own list.
+
+After setup, routine deploys are `just deploy` (defaults to the `routines`
+unit). goal-bot (v1) stays stopped and disabled; its unit file remains in
+the repo for reference.
+
 ## Data going live (one-way)
 
 Decide once: seed prod fresh via real ingestion, or migrate dev data in. Never
@@ -151,6 +238,7 @@ point tests at prod (same rule as A1). Going live is a one-way data step.
 
 ## Later / out of scope
 
-Webhook (needs public URL + TLS), HA/multi-region, container orchestration,
+Webhooks (a public HTTPS URL now exists per ADR-0021, but both bots still
+poll; not adopted), HA/multi-region, container orchestration,
 push-based/auto CD (routine deploys are one human-triggered command — C2).
 Migrations stay human-gated on purpose.

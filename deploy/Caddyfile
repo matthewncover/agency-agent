@@ -1,0 +1,26 @@
+# Caddyfile: public HTTPS front door for the VPS (ADR-0021).
+#
+# Install:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy obtains and renews Let's Encrypt certs automatically. Ports 80/tcp and
+# 443/tcp must be open (ufw and any Vultr firewall group) for the ACME
+# challenge and for traffic. Apps bind 127.0.0.1 only; Caddy is the sole public
+# listener. Routing is by path: each app gets its own `handle_path /<app>/*`
+# block (the prefix is stripped before proxying).
+
+trendingupward.space {
+	# Morning checklist Mini App (routines unit, 127.0.0.1:8081).
+	redir /morning /morning/
+	handle_path /morning/* {
+		reverse_proxy 127.0.0.1:8081
+	}
+
+	# Future apps: add a `handle_path /<app>/* { reverse_proxy 127.0.0.1:<port> }`
+	# block above this catch-all.
+
+	handle {
+		respond 404
+	}
+}

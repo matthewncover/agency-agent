@@ -4,7 +4,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
 
 # Rapid iteration shouldn't queue stale runs (C1 decision).

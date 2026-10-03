@@ -9,24 +9,25 @@
 #   2. uv sync --locked --all-packages
 #   3. pending-migration check   (alembic current vs heads; STOPS if they differ —
 #                                 migrations stay human-gated via `just deploy-migrate`)
-#   4. systemctl restart goal-bot
+#   4. systemctl restart $UNIT
 #   5. health check              (unit active + startup marker in the journal)
 #
 # This script never applies a migration and never force-pulls. Deploy only
-# from a green CI run on main. Code-only rollback: as goalbot,
-# `git checkout <prev-sha>` in the repo, then re-run this script.
+# from a green CI run on v2 (main is frozen at tag v1-final). Code-only
+# rollback: as goalbot, `git checkout <prev-sha>` in the repo, then re-run
+# this script.
 #
 # Config via env:
 #   REPO_DIR   repo checkout            (default: /opt/agency-agent)
 #   APP_USER   repo owner / service user (default: goalbot)
-#   UNIT       systemd unit             (default: goal-bot)
+#   UNIT       systemd unit             (default: routines; goal-bot is v1, stopped)
 #   ENV_FILE   secrets file             (default: /etc/agency-agent/agency.env)
 #   HEALTH_TIMEOUT  seconds to wait for the startup marker (default: 90)
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/opt/agency-agent}"
 APP_USER="${APP_USER:-goalbot}"
-UNIT="${UNIT:-goal-bot}"
+UNIT="${UNIT:-routines}"
 ENV_FILE="${ENV_FILE:-/etc/agency-agent/agency.env}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-90}"
 
