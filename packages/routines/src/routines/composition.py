@@ -37,6 +37,7 @@ def build_service(settings: Settings) -> ChecklistService:
         repo=SqlAlchemyChecklistRepository(engine),
         profiles=SqlAlchemyProfileRepository(engine),
         possessive=settings.possessive(),
+        once_per_day=not settings.routines_dev_person_id,
     )
 
 

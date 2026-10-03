@@ -49,7 +49,8 @@ routines:
 
 # Dev only: refused unless bound to 127.0.0.1. With no ROUTINES_BOT_TOKEN it
 # serves just the page and API, and completion messages go to the log; set a
-# dev bot token (never the prod one) to also poll and post.
+# dev bot token (never the prod one) to also poll and post. "Complete morning"
+# isn't limited to once a day here, so it can be tested repeatedly.
 # Mini App UI in a browser at http://127.0.0.1:8081/, skipping Telegram auth.
 routines-dev person="1":
     ROUTINES_DEV_PERSON_ID={{person}} ROUTINES_HTTP_HOST=127.0.0.1 uv run python -m routines

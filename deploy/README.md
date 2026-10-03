@@ -176,13 +176,19 @@ First-time setup (once, in this order):
    short name `morning` and URL `https://trendingupward.space/morning/`. Add the
    bot to the group chat. Privacy mode can stay on: the bot only needs
    `/morning`.
-3. **Firewall.** Check `sudo ufw status` on the box and any Vultr firewall
+3. **Switch the checkout to v2** (`main` is frozen at tag `v1-final`). Do
+   this before Caddy, because the Caddyfile and unit file only exist on `v2`:
+   ```sh
+   sudo -u goalbot git -C /opt/agency-agent fetch
+   sudo -u goalbot git -C /opt/agency-agent switch v2
+   ```
+4. **Firewall.** Check `sudo ufw status` on the box and any Vultr firewall
    group in the Vultr dashboard. Allow `80/tcp` (ACME challenge + redirect) and
    `443/tcp`:
    ```sh
    sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
    ```
-4. **Caddy.** Install from its official apt repo
+5. **Caddy.** Install from its official apt repo
    ([instructions](https://caddyserver.com/docs/install#debian-ubuntu-raspbian)),
    then:
    ```sh
@@ -190,11 +196,6 @@ First-time setup (once, in this order):
    sudo systemctl reload caddy
    ```
    Caddy fetches and renews the Let's Encrypt cert on its own.
-5. **Switch the checkout to v2** (`main` is frozen at tag `v1-final`):
-   ```sh
-   sudo -u goalbot git -C /opt/agency-agent fetch
-   sudo -u goalbot git -C /opt/agency-agent switch v2
-   ```
 6. **Migration 0010** (human-gated, backup first):
    ```sh
    cd /opt/agency-agent

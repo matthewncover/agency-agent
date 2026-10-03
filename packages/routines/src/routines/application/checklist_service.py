@@ -62,11 +62,14 @@ class ChecklistService:
         profiles: ProfileRepositoryPort,
         possessive: dict[int, str],
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        once_per_day: bool = True,
     ) -> None:
         self._repo = repo
         self._profiles = profiles
         self._possessive = possessive
         self._clock = clock
+        # Off in dev mode only, so "Complete morning" can be tested repeatedly.
+        self._once_per_day = once_per_day
 
     def _person(self, person_id: int) -> Person:
         person = self._profiles.get_person(person_id)
@@ -84,7 +87,7 @@ class ChecklistService:
         return ChecklistView(
             name=person.display_name,
             items=items,
-            sent_today=stored.sent_date == today,
+            sent_today=self._once_per_day and stored.sent_date == today,
         )
 
     def view(self, person_id: int) -> ChecklistView:
@@ -117,7 +120,7 @@ class ChecklistService:
         if note is not None and len(note) > MAX_NOTE:
             raise ListError(f"notes are limited to {MAX_NOTE} characters")
         today = self._today(person)
-        if not self._repo.claim_send(person_id, today):
+        if self._once_per_day and not self._repo.claim_send(person_id, today):
             raise AlreadySentError
         possessive = self._possessive.get(person_id, "their")
         message = format_completion(person.display_name, possessive, view.items, note)

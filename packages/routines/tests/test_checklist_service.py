@@ -181,3 +181,14 @@ def test_lists_are_private(service, profiles, person_id):
         service.check(jade.profile_id, n["Stretch"], True)
     with pytest.raises(StaleListError):
         service.replace(jade.profile_id, [Item(id=n["Stretch"], text="mine now")])
+
+
+def test_dev_mode_can_send_repeatedly(repo, profiles, person_id):
+    service = ChecklistService(
+        repo, profiles, {}, clock=Clock(MORNING), once_per_day=False
+    )
+    n = ids(build(service, person_id))
+    service.check(person_id, n["Stretch"], True)
+    assert service.claim_send(person_id, None)[0] == "Matthew's morning: Stretch"
+    assert not service.view(person_id).sent_today
+    assert service.claim_send(person_id, None)[0] == "Matthew's morning: Stretch"
