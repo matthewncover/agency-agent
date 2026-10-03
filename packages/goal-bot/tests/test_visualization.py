@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from fakes import FakeLLM
@@ -49,7 +49,9 @@ def test_command_payload_empty():
 
 # --- prompt section ---
 
-_CANDIDATE = CandidateItem(goal_id=1, goal_version_id=1, goal_title="Move", level="need")
+_CANDIDATE = CandidateItem(
+    goal_id=1, goal_version_id=1, goal_title="Move", level="need"
+)
 
 
 def _ctx(viz: list[SurfacedVisualization] | None = None) -> MorningContext:
@@ -74,7 +76,7 @@ def test_prompt_surfaces_visualization_verbatim():
     viz = [
         SurfacedVisualization(
             text="tomorrow I run at dawn",
-            captured_at=datetime(2026, 6, 26, 21, 30, tzinfo=timezone.utc),
+            captured_at=datetime(2026, 6, 26, 21, 30, tzinfo=UTC),
         )
     ]
     prompt = build_system_prompt(_ctx(viz))

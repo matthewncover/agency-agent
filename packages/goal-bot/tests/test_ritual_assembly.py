@@ -336,11 +336,17 @@ def test_carry_does_not_promote_a_want_to_protected(
             recurrence_config={"target": (TODAY + timedelta(days=1)).isoformat()},
         )
     g_want, v_want = _make_goal(
-        goal_repo, person_id, "Paint (want)", level=Level.WANT,
+        goal_repo,
+        person_id,
+        "Paint (want)",
+        level=Level.WANT,
         recurrence=RecurrenceType.ONEOFF,
     )
     g_need, v_need = _make_goal(
-        goal_repo, person_id, "Slid need", level=Level.NEED,
+        goal_repo,
+        person_id,
+        "Slid need",
+        level=Level.NEED,
         recurrence=RecurrenceType.ONEOFF,
     )
     yplan = plan_repo.get_or_create_plan(person_id, YESTERDAY)

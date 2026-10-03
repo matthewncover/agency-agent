@@ -258,7 +258,9 @@ class TelegramAdapter:
             # the same UTC instant, an inline call would freeze the loop for
             # the whole first turn and push the second job past its misfire
             # window — one message per household instead of two.
-            session = await asyncio.to_thread(service.fire_morning, person_id, date.today())
+            session = await asyncio.to_thread(
+                service.fire_morning, person_id, date.today()
+            )
             sessions[(chat_id, person_id)] = session
             if session.response_text:
                 text = label(chat_id, person_id, session.response_text)
