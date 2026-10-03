@@ -23,6 +23,10 @@ Documentation=file:///opt/agency-agent/deploy/README.md
 # Wait for network; if Postgres runs locally under systemd, also gate on it.
 After=network-online.target postgresql.service
 Wants=network-online.target
+# Back off so a hard-failing config doesn't hot-loop: at most 5 starts in 300s.
+# (These are [Unit] keys; under [Service] systemd ignores them.)
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -36,11 +40,9 @@ EnvironmentFile=-/etc/agency-agent/agency.env
 # uv resolves the workspace venv and runs polling + aiohttp + scheduler on one loop.
 ExecStart=/usr/local/bin/uv run python -m routines
 
-# Restart on crash, but back off so a hard-failing config doesn't hot-loop.
+# Restart on crash; the rate limit lives in [Unit] (StartLimit*).
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 # Logs to the journal (stderr).
 StandardOutput=journal
