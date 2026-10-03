@@ -41,7 +41,7 @@ Close with one of:
   that closes it.
 
 For loose ends that will outlive the session, offer to capture them durably
-(a task-tracker personal task, or a MATTHEW-TODO line) instead of letting the
+(a task-tracker personal task, or a TODO/ line) instead of letting the
 list scroll away.
 
 ## Rules

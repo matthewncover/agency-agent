@@ -1,6 +1,6 @@
 ---
 name: chat-logs
-description: Read goal-bot chat transcripts and tool-call logs (prod via journald on the VPS, or local stderr) for debugging, pattern review, and working the MATTHEW-TODO/03 user-testing checklist. Use whenever the user wants to show recent bot conversations, review what the bot said or logged, diagnose a mis-logged outcome, or check transcript behavior against the testing checklist.
+description: Read goal-bot chat transcripts and tool-call logs (prod via journald on the VPS, or local stderr) for debugging, pattern review, and working the TODO/_archive/MATTHEW-TODO/03 user-testing checklist. Use whenever the user wants to show recent bot conversations, review what the bot said or logged, diagnose a mis-logged outcome, or check transcript behavior against the testing checklist.
 ---
 
 # Reading goal-bot chat transcripts
@@ -61,4 +61,4 @@ Transcript lines go to the running process's stderr — nothing is persisted. Ru
 ## Notes
 
 - `text` is private user content. Read it for debugging and pattern review only; don't quote it anywhere outside the conversation with Matthew unless asked.
-- When reviewing against [MATTHEW-TODO/03-user-testing-checklist.md](../../MATTHEW-TODO/03-user-testing-checklist.md): tool lines are the ground truth for what was recorded (e.g. a `log_outcome` with the wrong `daily_plan_item_id`, a `not_done` that should never fire from silence, counter-advancing calls). Cross-check suspicious ones against the DB with the query-db skill.
+- When reviewing against [TODO/_archive/MATTHEW-TODO/03-user-testing-checklist.md](../../TODO/_archive/MATTHEW-TODO/03-user-testing-checklist.md): tool lines are the ground truth for what was recorded (e.g. a `log_outcome` with the wrong `daily_plan_item_id`, a `not_done` that should never fire from silence, counter-advancing calls). Cross-check suspicious ones against the DB with the query-db skill.
